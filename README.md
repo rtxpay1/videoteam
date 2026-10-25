@@ -12,7 +12,8 @@ Video-Produktionsteam „Zum Goldenen Token“: deutsche Erklär-Shorts (9:16, 1
 | `engine/timing.py` | Sprachspur + Satz-/Teilsatz-Zeiten, prüft die Länge 60–70 s |
 | `engine/sound.py`, `engine/mix.sh` | Musik und Effekte erzeugen, Endmix auf −14 LUFS |
 | `engine/render.js`, `engine/prender.sh` | Bild rendern (Playwright + ffmpeg), parallel in 3 Teilen |
-| `engine/produce.sh` | Alles nach der Stimme in einem Schritt, inkl. Stillstand-Check |
+| `engine/draft.sh` | Probe-Render (halbe Auflösung, 10 Bilder/s, ca. 1 Min.) mit Stillstand-Check und Übersichtsbild |
+| `engine/produce.sh` | Alles nach der Stimme in einem Schritt: erst Probe-Render, dann echtes Rendern, Export, Stillstand-Check |
 | `engine/stillcheck.py` | Prüft jede Sekunde auf sichtbare Bewegung |
 | `voices/hausstimme_*.wav` | Stimmvorlagen |
 | `p-*/` | Ein Ordner pro Video: `lines.txt` (Skript), `scene.html` (Animation), `sound_gen.py`, `sound.json`, `timing.json` |

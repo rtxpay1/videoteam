@@ -32,3 +32,4 @@ p-*/rerender.sh
 p-*/queue.sh
 p-*/prev*/
 p-*/seg.log
+p-*/draft*
