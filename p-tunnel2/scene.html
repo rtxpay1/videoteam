@@ -1,0 +1,260 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [0])[0];   // Startzeit des Teilsatzes mit diesem Wort
+window.CFG = {
+  REPL: [['dreizehntausend', '13.000'], ['dreißigtausend', '30.000'], ['achtunddreißig', '38'], ['fünftausend', '5.000'], ['zwölf Kilometer', '12 Kilometer'], ['zwanzig Stunden', '20 Stunden']],
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(Loch|Erde|raus|lange|kürzer|13\.000|Kilometer|schneller|Erdmittelpunkt|30\.000|nichts|seltsam|bremst|langsamer|Neuseeland|38|Minuten|zurück|Pendel|unmöglich|5\.000|Grad|Sonne|tiefste|12|Tausendstel|20|Stunden)/,
+  split: t => 26 * (1 - p(t, 0, .6)) + 26 * Math.max(0, 1 - Math.abs(t - S_[4][0]) / .3) + 30 * Math.max(0, 1 - Math.abs(t - S_[11][0]) / .3) + 18 * Math.max(0, 1 - Math.abs(t - S_[6][0]) / .3),
+  shake: t => (t < 2 ? 6 * (1 - t / 2) : 0) + (t > S_[3][0] && t < S_[5][0] ? 2 + 8 * p(t, S_[3][0], S_[5][0]) : 0) + (t > S_[11][0] && t < S_[11][0] + .5 ? 16 * (1 - (t - S_[11][0]) / .5) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || 'rgba(10,6,30,.85)', rot: o.rot }); }
+const kin = (i, f, d = .35) => t => p(t, at(i, f), at(i, f) + d);
+const pw = (w, d = .35, off = 0) => t => p(t, ph(w) + off, ph(w) + off + d);
+function stamp(s, x, y, size, col, k, rot = -.12) {
+  if (k <= 0) return; const e = eback(clamp(k));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(lerp(2.4, 1, e), lerp(2.4, 1, e)); g.globalAlpha = clamp(k * 3);
+  g.font = `${size}px IDB`; g.letterSpacing = '4px'; const w = g.measureText(s).width;
+  g.strokeStyle = col; g.lineWidth = 10; g.beginPath(); g.roundRect(-w / 2 - 34, -size * .72, w + 68, size * 1.44, 16); g.stroke();
+  g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, 0, 4); g.restore();
+}
+
+// ---------- Bausteine ----------
+function globe(x, y, r, o = {}) {
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 1.6, [60, 160, 255], .35); g.restore();
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#7fd4ff'); gr.addColorStop(.6, '#1f6fd6'); gr.addColorStop(1, '#0c2f7a');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, 7); g.clip(); const sp = o.spin || 0; g.fillStyle = 'rgba(80,210,120,.92)';
+  [[-.35, -.2, .32, .22], [.25, .1, .26, .34], [-.1, .45, .2, .14], [.7, -.4, .22, .16], [-.8, .2, .2, .3]].forEach(([dx, dy, w, h]) => { const xx = ((dx + sp + 1.5) % 3) - 1.5; g.beginPath(); g.ellipse(x + xx * r, y + dy * r, w * r, h * r, .4, 0, 7); g.fill(); });
+  g.restore();
+}
+// Querschnitt der Erde: Kruste, Mantel, äußerer und innerer Kern
+function crossSection(x, y, r, heat = 0) {
+  [[1, [60, 120, 70]], [.98, [190, 80, 40]], [.55, [255, 140, 40]], [.2, [255, 230, 140]]].forEach(([f, c]) => { const cc = mix(c, [255, 255, 220], heat * (1 - f) * .6); g.fillStyle = rgb(cc); g.beginPath(); g.arc(x, y, r * f, 0, 7); g.fill(); });
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * .7, [255, 160, 60], .35 + heat * .4); g.restore();
+}
+function faller(x, y, s, rot = 0, col = '#ffffff') {
+  g.save(); g.translate(x, y); g.rotate(rot); g.strokeStyle = col; g.fillStyle = col; g.lineWidth = s * .1; g.lineCap = 'round';
+  g.beginPath(); g.arc(0, -s * .5, s * .15, 0, 7); g.fill();
+  g.beginPath(); g.moveTo(0, -s * .35); g.lineTo(0, s * .1); g.moveTo(-s * .35, -s * .55); g.lineTo(0, -s * .25); g.lineTo(s * .35, -s * .55); g.moveTo(-s * .2, s * .5); g.lineTo(0, s * .1); g.lineTo(s * .2, s * .5); g.stroke(); g.restore();
+}
+function tunnelRings(t, speed, cols, a = 1) {
+  for (let i = 0; i < 18; i++) { const z = ((i / 18) + t * speed) % 1, r = Math.pow(z, 2.4) * 1400; g.strokeStyle = rgb(cols[i % cols.length], a * z); g.lineWidth = 6 + z * 40; g.beginPath(); g.arc(540, 960, r, 0, 7); g.stroke(); }
+}
+function gauge(x, y, r, v, label) {   // Tacho, v 0..1
+  g.save(); g.lineWidth = 26; g.lineCap = 'round';
+  g.strokeStyle = 'rgba(255,255,255,.15)'; g.beginPath(); g.arc(x, y, r, Math.PI * .8, Math.PI * 2.2); g.stroke();
+  const gr = g.createLinearGradient(x - r, 0, x + r, 0); gr.addColorStop(0, '#7dff6a'); gr.addColorStop(.6, '#ffd23f'); gr.addColorStop(1, '#ff3b4a');
+  g.strokeStyle = gr; g.beginPath(); g.arc(x, y, r, Math.PI * .8, Math.PI * (.8 + 1.4 * v)); g.stroke();
+  const a = Math.PI * (.8 + 1.4 * v); g.strokeStyle = '#fff'; g.lineWidth = 10; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * r * .85, y + Math.sin(a) * r * .85); g.stroke();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 20, 0, 7); g.fill(); g.restore();
+  if (label) text(label, x, y + r * .55, 54, 'IDB', '#ffffff');
+}
+function clock(x, y, r, frac, col) {
+  g.save(); g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.fillStyle = rgb(col, .9); g.beginPath(); g.moveTo(x, y); g.arc(x, y, r * .92, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); g.closePath(); g.fill();
+  g.strokeStyle = '#1a1030'; g.lineWidth = 10; g.beginPath(); g.moveTo(x, y); const a = -Math.PI / 2 + frac * 6.283 * 12; g.lineTo(x + Math.cos(a) * r * .8, y + Math.sin(a) * r * .8); g.stroke(); g.restore();
+}
+// Position beim Fall durch die Erde: 0 = Start, .5 = Mitte, 1 = anderes Ende (harmonische Schwingung)
+const fallPos = k => (1 - Math.cos(clamp(k) * Math.PI)) / 2;
+
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+SC[0] = t => {   // Hook: Sturz in die Röhre, Ringe rasen vorbei
+  bg([[0, '#1a0640'], [1, '#000000']]);
+  tunnelRings(t, .9, [[255, 90, 40], [255, 200, 60], [120, 60, 255], [40, 220, 255]], 1);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(540, 960, 300, [255, 180, 80], .6); g.restore();
+  faller(540 + Math.sin(t * 3) * 30, 980, 260 * (1 + .1 * Math.sin(t * 5)), Math.sin(t * 1.7) * .5);
+  big('WAS WÄRE, WENN', 280, 96, '#ffffff', p(t, .2, .55));
+  big('DU DURCH', 1230, 130, '#ffd23f', p(t, at(0, .35), at(0, .35) + .3), { glow: 'rgba(255,210,60,.7)' });
+  big('DIE ERDE FÄLLST?', 1380, 110, '#ffffff', p(t, at(0, .7), at(0, .7) + .3));
+};
+SC[1] = t => {   // Fragen: Pins tauchen auf der Erde auf, Fragezeichen glitchen
+  const u = t - S_[1][0], q2 = ph('Und wie lange'), q3 = ph('Die Antwort');
+  bg([[0, '#003a6a'], [1, '#001020']]); stars(t, .6);
+  g.save(); cam(1 + u * .02); globe(540, 960, 330, { spin: u * .15 });
+  [[400, 760], [700, 900], [520, 1150], [760, 1180], [330, 1000]].forEach(([x, y], i) => { const k = popIn(p(t, S_[1][0] + .2 + i * .25, S_[1][0] + .55 + i * .25)); if (k > 0) { g.save(); g.translate(x, y); g.scale(k, k); g.fillStyle = '#ff3b4a'; g.beginPath(); g.arc(0, -60, 34, 0, 7); g.moveTo(-26, -44); g.lineTo(0, 0); g.lineTo(26, -44); g.fill(); g.fillStyle = '#fff'; g.font = '40px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', 0, -60); g.restore(); } });
+  g.restore();
+  big('WO KOMMST', 260, 110, '#ffffff', kin(1, .02)(t), { alpha: 1 - p(t, q2 - .1, q2) });
+  big('DU RAUS?', 380, 120, '#ffd23f', kin(1, .08)(t), { alpha: 1 - p(t, q2 - .1, q2) });
+  big('WIE LANGE?', 320, 140, '#7af0ff', p(t, q2, q2 + .3), { glow: 'rgba(120,240,255,.6)' });
+  big('KÜRZER ALS GEDACHT', 1440, 76, '#ffd23f', p(t, q3 + .3, q3 + .65), { ls: 1 });
+};
+SC[2] = t => {   // Querschnitt: der Weg zeichnet sich durch alle Schichten, Zähler bis 12.742 km
+  const u = t - S_[2][0], k = eio(p(t, S_[2][0] + .3, at(2, .55)));
+  bg([[0, '#0a0a2a'], [1, '#1a0a1a']]);
+  g.save(); cam(1.02 + u * .02); crossSection(540, 960, 420);
+  drawOn([[[.5, .05], [.5, .95]]], k, 540, 960, 900, 900, '#ffffff', 12);
+  g.restore();
+  const n = Math.round(12742 * k);
+  big(n.toLocaleString('de-DE') + ' km', 300, 140, '#ffffff', kin(2, .02)(t), { ls: -3, glow: 'rgba(255,255,255,.5)' });
+  big('EINMAL KOMPLETT DURCH', 1460, 64, '#ffd23f', pw('Einmal durch')(t), { ls: 1 });
+};
+SC[3] = t => {   // Tacho + Speed-Lines: du wirst immer schneller
+  const u = t - S_[3][0], v = eio(p(t, S_[3][0], S_[4][0] + .3));
+  bg([[0, '#3a0a0a'], [1, '#100000']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 70; i++) { const x = (i * 157) % W, y = ((i * 263) - u * (600 + v * 3400)) % (H + 400); g.strokeStyle = `rgba(255,${150 + (i % 3) * 40},80,${.15 + v * .4})`; g.lineWidth = 3 + (i % 3) * 2; g.beginPath(); g.moveTo(x, (y + H + 400) % (H + 400) - 200); g.lineTo(x, (y + H + 400) % (H + 400) - 200 + 60 + v * 500); g.stroke(); } g.restore();
+  faller(540, 700, 180, Math.PI + Math.sin(u * 6) * .1);
+  gauge(540, 1180, 220, v, Math.round(v * 30000).toLocaleString('de-DE'));
+  big('IMMER', 300, 110, '#ffffff', pw('Du wirst')(t));
+  big('SCHNELLER', 430, 130, '#ff8a3a', pw('Du wirst', .35, .3)(t), { glow: 'rgba(255,140,60,.6)' });
+};
+SC[4] = t => {   // Mittelpunkt: Lichtblitz, Rekordgeschwindigkeit
+  const u = t - S_[4][0], sp = ph('rund');
+  bg([[0, '#ffb040'], [.5, '#ff4a1a'], [1, '#5a0a0a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 30; i++) { const a = i / 30 * 6.283 + u * 2; g.fillStyle = `rgba(255,255,220,${i % 2 ? .05 : .12})`; g.beginPath(); g.moveTo(540, 960); g.lineTo(540 + Math.cos(a) * 1900, 960 + Math.sin(a) * 1900); g.lineTo(540 + Math.cos(a + .08) * 1900, 960 + Math.sin(a + .08) * 1900); g.fill(); } g.restore();
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(540, 960, 380, [255, 255, 200], .9); g.restore();
+  faller(540, 960, 160, u * 3);
+  big('ERDMITTELPUNKT', 300, 96, '#2a0a00', kin(4, .02)(t), { sc2: 'rgba(255,255,255,.8)' });
+  big('30.000', 1300, 200, '#ffffff', p(t, sp, sp + .3), { ls: -6, glow: 'rgba(255,255,255,.6)' });
+  big('KM/H', 1440, 80, '#2a0a00', p(t, sp + .2, sp + .5), { ls: 8, sc2: 'rgba(255,255,255,.8)' });
+};
+SC[5] = t => {   // Kräftestern: Pfeile von allen Seiten heben sich auf
+  const u = t - S_[5][0], all = ph('Die Erde zieht'), k = eo(p(t, all, all + 1));
+  bg([[0, '#2a0a5a'], [1, '#0a0420']]);
+  crossSection(540, 960, 460, .4);
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283 + u * .2, r1 = 420, r2 = lerp(420, 120, k); arrow(540 + Math.cos(a) * r1, 960 + Math.sin(a) * r1, 540 + Math.cos(a) * r2, 960 + Math.sin(a) * r2, SPEC[i % 7], 9, clamp(k * 2)); }
+  faller(540, 960, 110, Math.sin(u * 2) * .3);
+  big('NICHTS ZIEHT', 300, 110, '#ffffff', kin(5, .02)(t));
+  big('MEHR NACH UNTEN', 420, 84, '#ffd23f', kin(5, .15)(t));
+  big('VON ALLEN SEITEN', 1440, 76, '#7af0ff', p(t, all + .3, all + .65), { ls: 1 });
+};
+SC[6] = t => {   // Negativ-Effekt: es wird seltsam, Bremspfeile
+  const u = t - S_[6][0], br = ph('Du fliegst'), inv = Math.max(0, 1 - Math.abs(t - S_[6][0] - .25) / .35);
+  bg([[0, '#00c8ff'], [1, '#003a8a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 50; i++) { const x = (i * 157) % W, y = ((i * 263) + u * 900) % H; g.strokeStyle = 'rgba(255,255,255,.3)'; g.lineWidth = 4; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 120 + u * 20); g.stroke(); } g.restore();
+  const y = 1100 - eo(p(t, br, S_[7][0])) * 500; faller(540, y, 200, Math.PI * eo(p(t, S_[6][0], br)));
+  const bk = p(t, br + .5, br + 1.1); if (bk > 0) for (let i = -1; i <= 1; i++) arrow(540 + i * 140, y - 260, 540 + i * 140, y - 120, [255, 60, 80], 12, bk);
+  if (inv > 0) { g.save(); g.globalCompositeOperation = 'difference'; g.fillStyle = `rgba(255,255,255,${inv})`; g.fillRect(0, 0, W, H); g.restore(); }
+  big('SELTSAM:', 300, 130, '#ffffff', kin(6, .02)(t), { sc2: 'rgba(0,30,80,.85)' });
+  big('JETZT BREMST SIE', 1440, 84, '#ffd23f', p(t, br + .6, br + .95), { sc2: 'rgba(0,30,80,.85)' });
+};
+SC[7] = t => {   // 3D-Drehung der Erde: von Deutschland ans andere Ende, Ankunft bei Neuseeland
+  const u = t - S_[7][0], nz = ph('Von Deutschland'), k = eio(p(t, nz, nz + 1.4));
+  bg([[0, '#0a3a6a'], [1, '#021024']]); stars(t, .6);
+  spin3d(k * Math.PI, 540, 960, back => {
+    globe(540, 960, 330, { spin: u * .05 + (back ? 1.5 : 0) });
+    const lbl = back ? 'NEUSEELAND' : 'DEUTSCHLAND';
+    g.fillStyle = back ? '#7dff6a' : '#ffd23f'; g.beginPath(); g.arc(540, 760, 22, 0, 7); g.fill();
+    text(lbl, 540, 700, 50, 'IDB', back ? '#7dff6a' : '#ffd23f', { stroke: 8 });
+  }, { skew: .08 });
+  const slow = 1 - eo(p(t, S_[7][0], nz));
+  faller(540, 600 - (1 - slow) * 140, 120, 0);
+  big('LANGSAMER …', 300, 100, '#ffffff', kin(7, .02)(t), { alpha: 1 - p(t, nz - .2, nz) });
+  big('ANKUNFT!', 300, 130, '#7dff6a', p(t, nz + 1, nz + 1.35), { glow: 'rgba(120,255,100,.6)' });
+};
+SC[8] = t => {   // Stoppuhr rast bis 38 Minuten
+  const u = t - S_[8][0], ans = ph('Nur rund'), k = eio(p(t, S_[8][0] + .2, ans + 1));
+  bg([[0, '#ff5ac8'], [1, '#5a0a8a']]);
+  g.save(); cam(1 + Math.sin(u * 3) * .02 + (punch(t, ans + 1, .1) - 1)); clock(540, 940, 330, k * 38 / 60, [255, 90, 200]); g.restore();
+  const m = Math.floor(k * 38), sec = Math.floor((k * 38 * 60) % 60);
+  big(`${m}:${String(sec).padStart(2, '0')}`, 1400, 170, '#ffffff', kin(8, .02)(t), { ls: -4, glow: 'rgba(255,255,255,.5)' });
+  big('WIE LANGE?', 300, 120, '#ffffff', kin(8, .02)(t), { sc2: 'rgba(60,0,60,.85)' });
+};
+SC[9] = t => {   // Zurückfallen: Bild spult in Gegenrichtung
+  const u = t - S_[9][0], back = ph('Wenn dich'), k = p(t, back + .4, S_[10][0]);
+  bg([[0, '#0a0a3a'], [1, '#1a0a4a']]);
+  g.save(); cam(1.05); crossSection(540, 960, 420);
+  g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 50; g.beginPath(); g.moveTo(540, 520); g.lineTo(540, 1400); g.stroke();
+  const y = lerp(1390, 960, eio(k)); faller(540, y, 90, Math.PI);
+  g.restore();
+  if (k > 0 && k < 1) { g.save(); g.globalAlpha = .5; for (let i = 0; i < 10; i++) { g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(0, ((i * 197 - u * 1600) % H + H) % H, W, 8); } g.restore(); text('◀◀', 900, 300, 80, 'IDB', '#ffffff'); }
+  big('UND DANN?', 300, 120, '#ffffff', kin(9, .02)(t), { alpha: 1 - p(t, back, back + .2) });
+  big('ZURÜCK!', 300, 150, '#ffd23f', p(t, back + .5, back + .85), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[10] = t => {   // Kurve zeichnet sich: Hin und Her wie ein Pendel
+  const u = t - S_[10][0], k = p(t, S_[10][0] + .1, S_[11][0]);
+  bg([[0, '#003a3a'], [1, '#001414']]);
+  g.save(); g.strokeStyle = 'rgba(120,255,220,.12)'; g.lineWidth = 2; for (let y = 640; y <= 1280; y += 80) { g.beginPath(); g.moveTo(80, y); g.lineTo(1000, y); g.stroke(); } g.restore();
+  const pts = Array.from({ length: 120 }, (_, i) => [i / 119, .5 - Math.cos(i / 119 * Math.PI * 4) * .4]);
+  drawOn([pts], k, 540, 960, 920, 640, '#50ffdc', 12);
+  text('Start', 70, 700, 40, 'IDX', 'rgba(255,255,255,.7)', { align: 'left' }); text('Neuseeland', 70, 1220, 40, 'IDX', 'rgba(255,255,255,.7)', { align: 'left' });
+  const sw = Math.sin(u * 2.4); g.save(); g.translate(540, 360); g.rotate(sw * .5); g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 200); g.stroke(); globe(0, 230, 40); g.restore();
+  big('HIN UND HER', 1440, 100, '#ffd23f', kin(10, .5)(t), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[11] = t => {   // Stempel: unmöglich
+  const u = t - S_[11][0], imp = ph('Weil es');
+  bg([[0, '#1a1a1a'], [1, '#000000']]);
+  g.save(); cam(1.05 + u * .03); crossSection(540, 960, 380); g.restore();
+  big('WARUM MACHT', 300, 100, '#ffffff', kin(11, .02)(t));
+  big('DAS NIEMAND?', 420, 110, '#ffffff', kin(11, .15)(t));
+  stamp('UNMÖGLICH', 540, 1400, 110, '#ff3b4a', p(t, imp, imp + .3), -.1);
+};
+SC[12] = t => {   // Hitzeflimmern: der Kern glüht wie die Sonne
+  const u = t - S_[12][0], sun = ph('Ungefähr so'), heat = eo(p(t, S_[12][0], at(12, .4)));
+  bg([[0, '#3a0a00'], [1, '#100000']]);
+  const c = OFFX[0], x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H);
+  const keep = g; g = x; crossSection(540, 980, 460, heat); if (t > sun) { g.save(); g.globalAlpha = eo(p(t, sun, sun + .6)); g.save(); g.globalCompositeOperation = 'lighter'; glow(860, 520, 200, [255, 200, 80], .8); g.restore(); g.fillStyle = '#ffe27a'; g.beginPath(); g.arc(860, 520, 90, 0, 7); g.fill(); g.restore(); } g = keep;
+  for (let y = 0; y < H; y += 12) { const dx = Math.sin(y * .03 + u * 9) * 8 * heat; g.drawImage(c, 0, y, W, 12, dx, y, W, 12); }
+  const n = Math.round(5000 * heat);
+  big(n.toLocaleString('de-DE') + ' °C', 300, 150, '#ffd23f', kin(12, .02)(t), { ls: -4, glow: 'rgba(255,180,60,.8)' });
+  big('WIE DIE SONNE', 1440, 100, '#ffffff', p(t, sun + .3, sun + .65));
+};
+SC[13] = t => {   // Maßstab-Zoom: vom Planeten runter zum winzigen Bohrloch
+  const u = t - S_[13][0], k = eio(p(t, S_[13][0] + .3, at(13, .7)));
+  bg([[0, '#0a1a3a'], [1, '#02060f']]); stars(t, .6);
+  g.save(); const z = lerp(1, 26, k); g.translate(540, 960); g.scale(z, z); g.translate(-540, -lerp(960, 541, k));
+  crossSection(540, 960, 420);
+  g.fillStyle = '#ffd23f'; g.fillRect(538, 540, 4, 4);
+  g.restore();
+  if (k > .8) { const a = p(t, at(13, .7), at(13, .8)); g.save(); g.globalAlpha = a; g.fillStyle = '#ffd23f'; g.fillRect(520, 940, 40, 140); g.fillStyle = '#2a1a00'; g.beginPath(); g.moveTo(520, 1080); g.lineTo(560, 1080); g.lineTo(540, 1130); g.fill(); g.restore(); }
+  big('TIEFSTES LOCH', 300, 110, '#ffffff', kin(13, .02)(t));
+  big('12 KM', 1440, 150, '#ffd23f', kin(13, .75)(t), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[14] = t => {   // Fortschrittsbalken: nicht mal ein Tausendstel
+  const u = t - S_[14][0], k = eo(p(t, S_[14][0] + .2, S_[14][0] + 1.2));
+  bg([[0, '#2a0a5a'], [1, '#0a0420']]);
+  g.save(); g.fillStyle = 'rgba(255,255,255,.15)'; g.beginPath(); g.roundRect(100, 900, 880, 120, 60); g.fill();
+  g.fillStyle = '#ff3b4a'; g.shadowColor = '#ff3b4a'; g.shadowBlur = 30; g.beginPath(); g.roundRect(100, 900, Math.max(10, 880 * .00096 * k), 120, 60); g.fill(); g.restore();
+  text('0,1 %', 540, 1110, 70, 'IDB', '#ffffff', { alpha: k });
+  text('▲ so weit sind wir gekommen', 300, 1210, 40, 'IDX', 'rgba(255,255,255,.75)', { alpha: k, align: 'left' });
+  big('NICHT MAL', 380, 110, '#ffffff', kin(14, .02)(t));
+  big('1/1000', 540, 170, '#ff5a8a', kin(14, .35)(t), { glow: 'rgba(255,90,140,.6)' });
+};
+SC[15] = t => {   // Pointe: Split-Screen Flugzeug 20 h gegen Tunnel 38 min, Endkarte
+  const u = t - S_[15][0], tun = ph('Durch die Erde'), k1 = p(t, S_[15][0] + .3, tun), k2 = p(t, tun, tun + 1.6);
+  splitScreen(p(t, S_[15][0], S_[15][0] + .5), () => {
+    bg([[0, '#5ab0ff'], [1, '#1a5ad0']]);
+    g.save(); g.translate(270 + Math.sin(u * 2) * 20, 760); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(0, 0, 150, 30, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(-20, 0); g.lineTo(-80, -120); g.lineTo(20, -10); g.fill(); g.beginPath(); g.moveTo(-20, 10); g.lineTo(-60, 110); g.lineTo(20, 10); g.fill(); g.restore();
+    clock(270, 1120, 150, (k1 * 20) % 1, [90, 160, 255]); text('20 h', 270, 1340, 80, 'IDB', '#ffffff', { stroke: 8 });
+  }, () => {
+    bg([[0, '#ff7a1a'], [1, '#8a1a0a']]);
+    crossSection(810, 760, 160);
+    clock(810, 1120, 150, k2 * 38 / 60, [255, 210, 60]); text('38 min', 810, 1340, 80, 'IDB', '#ffffff', { stroke: 8 });
+  }, { line: '#ffffff' });
+  big('SCHADE EIGENTLICH', 300, 84, '#ffffff', kin(15, .02)(t));
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(20,6,30,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '140px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-5px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#ffd23f'); gr.addColorStop(.5, '#ff7a1a'); gr.addColorStop(1, '#ff3a8a');
+    g.fillStyle = gr; g.translate(540, 860); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('38 MINUTEN', 0, -80); g.font = '92px IDB'; g.fillText('BIS NEUSEELAND.', 0, 70); g.restore();
+    text('Wenn es nur ginge.', 540, 1080, 48, 'IDS', '#ffffff', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+};
+function scene(t) {
+  let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
+  SC[i](t);
+}
+</script>
+</body></html>

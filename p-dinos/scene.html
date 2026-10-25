@@ -1,0 +1,325 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const IMPACT = at(2, .92);
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [0])[0];   // Startzeit des Teilsatzes mit diesem Wort
+const fr = (i, w) => (ph(w) - S_[i][0]) / (S_[i][1] - S_[i][0]);
+window.CFG = {
+  REPL: [['sechsundsechzig Millionen', '66 Millionen'], ['neunzehnhundertzweiundachtzig', '1982']],
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(Dinosaurier|ausgestorben|dich|nicht|Grund|66|Asteroid|Glück|Säugetiere|Maus|Chance|Dinosauriern|Platz|Wale|Pferde|Affen|wir|verfehlt|klein|1982|Dino-Mensch|Gedankenspiel|Verrückte|Vögel|Flügel|Balkon)/,
+  split: t => 26 * (1 - p(t, 0, .7)) + 30 * Math.max(0, 1 - Math.abs(t - IMPACT) / .35) + 22 * Math.max(0, 1 - Math.abs(t - S_[4][0]) / .3) + 26 * Math.max(0, 1 - Math.abs(t - S_[12][0]) / .3) + 24 * Math.max(0, 1 - Math.abs(t - S_[8][0]) / .4) + (t > S_[11][0] && t < S_[12][0] && Math.sin(t * 9) > .93 ? 14 : 0),
+  shake: t => (t > .35 && t < 1.1 ? 16 * (1 - (t - .35) / .75) : 0) + (t > IMPACT && t < IMPACT + .9 ? 26 * (1 - (t - IMPACT) / .9) : 0) + (t > S_[12][0] && t < S_[12][0] + .5 ? 12 * (1 - (t - S_[12][0]) / .5) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || 'rgba(10,6,30,.85)', rot: o.rot }); }
+const kin = (i, f, d = .35) => t => p(t, at(i, f), at(i, f) + d);
+function stamp(s, x, y, size, col, k, rot = -.12) {
+  if (k <= 0) return; const e = eback(clamp(k));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(lerp(2.4, 1, e), lerp(2.4, 1, e)); g.globalAlpha = clamp(k * 3);
+  g.font = `${size}px IDB`; g.letterSpacing = '4px'; const w = g.measureText(s).width;
+  g.strokeStyle = col; g.lineWidth = 10; g.beginPath(); g.roundRect(-w / 2 - 34, -size * .72, w + 68, size * 1.44, 16); g.stroke();
+  g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, 0, 4); g.restore();
+}
+
+// ---------- Silhouetten (Einheitsquadrat, Blick nach rechts) ----------
+const REX = resample([[0,.45],[.25,.38],[.4,.3],[.55,.25],[.65,.12],[.72,.05],[.95,.08],[1,.15],[.98,.22],[.85,.22],[.88,.28],[.75,.3],[.7,.38],[.74,.42],[.78,.46],[.7,.46],[.66,.48],[.62,.6],[.65,.75],[.7,.95],[.6,.97],[.56,.8],[.5,.62],[.45,.78],[.48,.96],[.38,.97],[.36,.75],[.33,.55],[.2,.5],[0,.47]]);
+const NECK = resample([[0,.6],[.2,.5],[.35,.42],[.55,.4],[.65,.35],[.75,.15],[.82,.02],[.92,.03],[.93,.08],[.85,.1],[.8,.35],[.78,.55],[.78,.95],[.7,.95],[.68,.65],[.45,.65],[.45,.95],[.37,.95],[.35,.62],[.2,.58],[0,.62]]);
+const MOUSE = resample([[0,.55],[.1,.62],[.2,.62],[.25,.45],[.45,.35],[.6,.38],[.62,.25],[.7,.22],[.74,.3],[.72,.4],[.85,.5],[.95,.6],[.85,.65],[.7,.7],[.65,.78],[.58,.78],[.5,.72],[.35,.75],[.3,.8],[.22,.78],[.2,.7],[.08,.66],[0,.6]]);
+const WHALE = resample([[0,.3],[.08,.45],[0,.6],[.12,.5],[.3,.55],[.6,.7],[.85,.68],[1,.55],[.95,.4],[.8,.35],[.5,.35],[.45,.28],[.4,.36],[.15,.45]]);
+const HORSE = resample([[.1,.35],[.02,.6],[.08,.62],[.18,.4],[.6,.38],[.72,.2],[.82,.08],[.86,.1],[1,.3],[.96,.36],[.85,.3],[.78,.45],[.76,.95],[.7,.95],[.68,.6],[.3,.6],[.3,.95],[.24,.95],[.2,.55],[.18,.42]]);
+const APE = resample([[.45,.05],[.58,.08],[.62,.2],[.58,.28],[.7,.32],[.85,.6],[.82,.75],[.75,.72],[.7,.5],[.68,.62],[.75,.95],[.65,.95],[.55,.7],[.45,.7],[.38,.95],[.28,.95],[.32,.62],[.3,.5],[.22,.72],[.15,.75],[.2,.55],[.3,.32],[.38,.28],[.36,.15]]);
+const HUMAN = resample([[.45,.02],[.55,.02],[.58,.08],[.55,.13],[.68,.17],[.72,.45],[.68,.47],[.64,.25],[.62,.5],[.6,.98],[.53,.98],[.5,.58],[.47,.98],[.4,.98],[.38,.5],[.36,.25],[.32,.47],[.28,.45],[.32,.17],[.45,.13],[.42,.08]]);
+const BIRD = resample([[0,.5],[.25,.45],[.45,.3],[.6,.25],[.68,.12],[.78,.1],[.85,.15],[.95,.18],[.84,.22],[.8,.3],[.78,.45],[.65,.62],[.55,.68],[.56,.85],[.5,.85],[.48,.68],[.3,.6],[0,.55]]);
+// Dino-Mensch als Strichzeichnung (Gedankenspiel von 1982)
+const OVAL = (cx, cy, rx, ry, n = 24) => Array.from({ length: n + 1 }, (_, i) => [cx + Math.cos(i / n * 6.283) * rx, cy + Math.sin(i / n * 6.283) * ry]);
+const SAUROID = [OVAL(.5, .13, .12, .1), OVAL(.45, .12, .03, .035, 12), OVAL(.56, .12, .03, .035, 12), [[.5, .23], [.5, .28]], [[.38, .3], [.62, .3], [.6, .55], [.4, .55], [.38, .3]],
+  [[.38, .32], [.3, .45], [.28, .55]], [[.28, .55], [.25, .6]], [[.28, .55], [.28, .61]], [[.28, .55], [.31, .6]],
+  [[.62, .32], [.7, .45], [.72, .55]], [[.72, .55], [.69, .6]], [[.72, .55], [.72, .61]], [[.72, .55], [.75, .6]],
+  [[.44, .55], [.42, .75], [.44, .95], [.38, .97]], [[.56, .55], [.58, .75], [.56, .95], [.62, .97]]];
+
+function eye(x, y, r, t) { g.save(); g.fillStyle = '#ffe14a'; g.shadowColor = '#ffb000'; g.shadowBlur = 40; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.fillStyle = '#120a00'; g.beginPath(); g.ellipse(x, y, r * .22, r * .8 * (Math.sin(t * 3) > .97 ? .1 : 1), 0, 0, 7); g.fill(); g.restore(); }
+function jungle(t, a = 1) {
+  bg([[0, '#0b3d2e'], [.55, '#11695a'], [1, '#062018']]);
+  g.save(); g.globalAlpha = a;
+  for (let n = 0; n < 3; n++) { g.fillStyle = ['#0e5a3e', '#0b4a33', '#073424'][n]; for (let i = 0; i < 9; i++) { const x = (i * 150 + n * 70 + Math.sin(t * .6 + i) * 10) % (W + 150) - 75, h = 380 + n * 120 + (i % 3) * 80; g.beginPath(); g.moveTo(x, H); g.quadraticCurveTo(x + 20, H - h * .6, x + Math.sin(t + i) * 30, H - h); g.quadraticCurveTo(x + 60, H - h * .5, x + 70, H); g.fill(); } }
+  g.restore();
+}
+function birdV(x, y, s, ph, col = '#1a1030') {
+  const f = Math.sin(ph) * .6; g.save(); g.strokeStyle = col; g.lineWidth = s * .14; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(x - s, y - s * f); g.quadraticCurveTo(x - s * .4, y - s * (.3 + f * .5), x, y); g.quadraticCurveTo(x + s * .4, y - s * (.3 + f * .5), x + s, y - s * f); g.stroke(); g.restore();
+}
+function asteroid(x, y, r, t, trail = 1) {
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 26; i++) { const k = i / 26; glow(x - k * 520 * trail, y - k * 380 * trail, r * (1.4 - k), [255, 120 + 100 * k, 40], .5 * (1 - k)); }
+  g.restore();
+  g.save(); g.translate(x, y); g.rotate(t * 2); g.fillStyle = '#5a3a2a'; g.beginPath(); for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283, rr = r * (.8 + .2 * Math.sin(i * 2.7)); i ? g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,170,80,.6)'; g.beginPath(); g.arc(-r * .3, -r * .2, r * .25, 0, 7); g.fill(); g.restore();
+}
+// Kontinent für die Karten-Szenen
+const LAND = resample([[.1,.3],[.3,.15],[.5,.2],[.7,.1],[.9,.25],[.95,.5],[.8,.7],[.85,.9],[.6,.95],[.4,.8],[.2,.9],[.05,.65]], 120);
+const SPOTS = [[300, 760], [520, 700], [720, 650], [820, 860], [420, 900], [620, 950], [260, 1050], [480, 1130], [760, 1080], [560, 1280], [340, 1260], [700, 1250]];
+function landMap(t) {
+  bg([[0, '#0a5fa8'], [1, '#063a6e']]);
+  g.save(); g.globalAlpha = .25; g.strokeStyle = '#9fe0ff'; g.lineWidth = 2; for (let y = 520; y < 1500; y += 60) { g.beginPath(); for (let x = 0; x <= W; x += 30) g.lineTo(x, y + Math.sin(x / 90 + t * 2 + y) * 6); g.stroke(); } g.restore();
+  shape(LAND, 540, 960, 900, 980, '#3fb06a', { stroke: 8, strokeColor: '#bff5c8', glow: 'rgba(80,255,150,.4)' });
+}
+
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+SC[0] = t => {   // Hook: T-Rex brüllt ins Bild (Glitch + Punch-Zoom)
+  jungle(t);
+  g.save(); cam(1.5 - eo(p(t, 0, .5)) * .35 + (punch(t, .4, .18) - 1) + t * .03, -.04 + t * .02);
+  shape(REX, 560, 900, 1050, 900, '#10241c', { glow: 'rgba(0,0,0,.6)' });
+  eye(560 - 525 + .8 * 1050, 900 - 450 + .13 * 900, 26, t);
+  g.restore();
+  big('WAS WÄRE, WENN', 290, 100, '#ffffff', p(t, .3, .65));
+  big('DIE DINOS', 1180, 150, '#7dff6a', p(t, at(0, .35), at(0, .35) + .35), { glow: 'rgba(120,255,100,.6)' });
+  big('NIE AUSSTARBEN?', 1340, 104, '#ffd23f', p(t, at(0, .7), at(0, .7) + .35), { glow: 'rgba(255,200,60,.6)' });
+};
+SC[1] = t => {   // Split-Screen: Dinos ja, du nein, dann die Frage nach dem Grund
+  const u = t - S_[1][0], sw = ph('Und der Grund') - .3;
+  if (t < sw + .3) {
+    splitScreen(p(t, S_[1][0], S_[1][0] + .5), () => { jungle(t); shape(REX, 300 + Math.sin(u * 2) * 10, 960, 520, 450, '#0d2a1f'); }, () => { bg([[0, '#5a1aa8'], [1, '#22084a']]); shape(HUMAN, 800, 980, 300, 620, '#ffd0f0', { glow: 'rgba(255,120,220,.6)', alpha: 1 - .6 * eo(kin(1, .25)(t)) }); }, { line: '#ffd23f' });
+    big('DINOS ✓', 520, 84, '#7dff6a', kin(1, .02)(t), { x: 290 });
+    big('DU', 520, 84, '#ffffff', kin(1, .1)(t), { x: 800 });
+    if (kin(1, .25)(t) > 0) { g.save(); g.strokeStyle = '#ff3b4a'; g.lineWidth = 30; g.lineCap = 'round'; g.shadowColor = '#ff3b4a'; g.shadowBlur = 40; const k = eo(kin(1, .25)(t)); g.beginPath(); g.moveTo(660, 720); g.lineTo(lerp(660, 940, k), lerp(720, 1240, k)); g.moveTo(940, 720); g.lineTo(lerp(940, 660, k), lerp(720, 1240, k)); g.stroke(); g.restore(); }
+  } else {
+    const k = p(t, sw + .3, sw + .7);
+    bg([[0, '#ff5a1f'], [.5, '#b0136a'], [1, '#2a0640']]);
+    g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + u * .8; g.fillStyle = `rgba(255,255,255,${i % 2 ? .04 : .09})`; g.beginPath(); g.moveTo(540, 900); g.lineTo(540 + Math.cos(a) * 1800, 900 + Math.sin(a) * 1800); g.lineTo(540 + Math.cos(a + .12) * 1800, 900 + Math.sin(a + .12) * 1800); g.fill(); } g.restore();
+    g.save(); cam(lerp(1.4, 1, eback(k)) + Math.sin(u * 3) * .02); g.fillStyle = '#16061f'; g.beginPath(); g.roundRect(340, 700, 400, 400, 40); g.fill(); g.restore();
+    big('?', 900, 300, '#ffd23f', k, { glow: 'rgba(255,210,60,.8)' });
+    big('DER GRUND?', 400, 120, '#ffffff', k);
+    big('ERSTAUNLICH EINFACH', 1300, 76, '#ffd23f', p(t, sw + 1.2, sw + 1.55), { ls: 1 });
+  }
+};
+SC[2] = t => {   // Zeitreise-Warp + Asteroid schlägt ein
+  const u = t - S_[2][0], arrive = at(2, .45);
+  bg([[0, '#12002e'], [1, '#30005a']]);
+  if (t < arrive) {
+    warp(u, 2.2, 1); const n = Math.round(66e6 * eio(p(t, S_[2][0], at(2, .4))));
+    big('−' + n.toLocaleString('de-DE'), 900, 130, '#ffffff', kin(2, .02)(t), { ls: -4, glow: 'rgba(160,120,255,.8)' });
+    big('JAHRE', 1040, 70, '#c8a8ff', kin(2, .05)(t), { ls: 8 });
+  } else {
+    stars(t, .9, t * .3);
+    const k = p(t, arrive, IMPACT);
+    g.save(); g.fillStyle = '#2a1050'; g.beginPath(); g.moveTo(0, 1500); g.lineTo(260, 1180); g.lineTo(420, 1300); g.lineTo(620, 1020); g.lineTo(840, 1320); g.lineTo(W, 1200); g.lineTo(W, H); g.lineTo(0, H); g.fill(); g.restore();
+    text('≈ 10 km', 860, 960, 52, 'IDX', '#ffd23f', { alpha: eo(p(t, at(2, .6), at(2, .7))) });
+    asteroid(lerp(120, 620, k * k * .3 + k * .7), lerp(260, 1020, k * k * .3 + k * .7), lerp(60, 120, k), t, .4 + .6 * k);
+    big('ASTEROID!', 380, 130, '#ff8a3a', p(t, arrive, arrive + .35), { glow: 'rgba(255,140,60,.7)' });
+  }
+  if (t > IMPACT) { const f = 1 - p(t, IMPACT, IMPACT + .4); g.fillStyle = `rgba(255,240,200,${f})`; g.fillRect(0, 0, W, H); burst(t, IMPACT, 620, 1020, { scale: 1.2 }); }
+};
+const GRID = Array.from({ length: 20 }, (_, i) => ({ x: 190 + (i % 4) * 233, y: 560 + Math.floor(i / 4) * 175, kind: i % 4, dies: i % 4 < 2 }));
+function gridIcons(t, which, glowUp = 0) {
+  GRID.forEach((c, i) => { if (which(c)) { const pts = [REX, NECK, MOUSE, BIRD][c.kind], col = SPEC[(i * 3) % 7], s = 1 + glowUp * .25; shape(pts, c.x, c.y + Math.sin(t * 3 + i) * 6, 170 * s, 140 * s, rgb(col), { glow: rgb(col, .6 + glowUp * .4), blur: 24 + glowUp * 40 }); } });
+}
+SC[3] = t => {   // Pixel-Zerfall: die großen Dinos verschwinden, die Kleinen bleiben
+  const u = t - S_[3][0], luck = ph('Und genau das');
+  bg([[0, '#3a3a52'], [1, '#14141f']]);
+  g.save(); g.globalAlpha = .5; for (let i = 0; i < 70; i++) { const x = (i * 157 + u * 40) % W, y = (i * 263 + u * 120 * (1 + i % 3)) % H; g.fillStyle = '#9a9ab0'; g.fillRect(x, y, 4, 4); } g.restore();
+  g.save(); cam(1.04 + u * .03);
+  dissolve(p(t, at(3, .08), luck), () => gridIcons(t, c => c.dies), { dir: [1, 0] });
+  gridIcons(t, c => !c.dies, eo(p(t, luck, luck + .5)));
+  g.restore();
+  big('DIE DINOS', 260, 130, '#ffffff', kin(3, .02)(t));
+  big('STERBEN AUS', 400, 110, '#ff5a5a', kin(3, .15)(t), { glow: 'rgba(255,80,80,.7)' });
+  big('UNSER GLÜCK!', 1420, 100, '#7dff6a', p(t, luck + .3, luck + .65), { glow: 'rgba(120,255,100,.6)' });
+};
+SC[4] = t => {   // Iris öffnet: Säugetiere gab es schon, dann Kamerafahrt vom T-Rex zur winzigen Maus
+  const u = t - S_[4][0], small = ph('Aber die meisten'), k = eio(p(t, small - .3, small + 1.6));
+  bg([[0, '#ff2a5a'], [1, '#6a0030']]);
+  iris(p(t, S_[4][0] + .05, S_[4][0] + .7), 540, 1000, () => {
+    bg([[0, '#06103a'], [1, '#02041a']]); stars(t, .9, u * .2);
+    g.save(); g.globalCompositeOperation = 'lighter'; glow(900, 640, 160, [220, 230, 255], .7); g.restore(); g.fillStyle = '#eef2ff'; g.beginPath(); g.arc(900, 640, 70, 0, 7); g.fill();
+    g.save(); const z = lerp(1, 5.2, k); g.translate(540, 960); g.scale(z, z); g.translate(-lerp(540, 820, k), -lerp(900, 1540, k));
+    g.fillStyle = '#0a0e2a'; g.fillRect(-2000, 1560, 5000, 2000);
+    shape(REX, 520, 1060, 1100, 1000, '#26306e', { stroke: 6, strokeColor: 'rgba(170,190,255,.7)', glow: 'rgba(120,140,255,.4)' });
+    shape(MOUSE, 820, 1548, 46, 30, '#ffd23f', { glow: 'rgba(255,210,60,.9)', blur: 16 });
+    g.restore();
+  }, { ring: '#ffd23f' });
+  const a1 = 1 - p(t, small - .2, small);
+  big('SÄUGETIERE', 330, 120, '#ffffff', kin(4, .02)(t), { alpha: a1, glow: 'rgba(150,170,255,.7)' });
+  big('GAB ES SCHON', 470, 90, '#9fe0ff', kin(4, .12)(t), { alpha: a1 });
+  big('SO KLEIN', 330, 120, '#ffd23f', p(t, small, small + .35), { glow: 'rgba(255,210,60,.6)' });
+  big('WIE EINE MAUS', 470, 90, '#ffffff', p(t, small + .4, small + .75));
+};
+SC[5] = t => {   // Karte: alle großen Plätze besetzt (Icons poppen auf)
+  const u = t - S_[5][0], pl = ph('Die großen Plätze');
+  g.save(); cam(1.08 - u * .02, Math.sin(u * .7) * .02); landMap(t);
+  SPOTS.forEach(([x, y], i) => { const k = popIn(p(t, pl + i * .08, pl + i * .08 + .35)); if (k > 0) { g.save(); g.translate(x, y); g.scale(k, k); g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(0, 50, 60, 14, 0, 0, 7); g.fill(); shape(i % 2 ? NECK : REX, 0, 0, 130, 110, '#1b2a10', { stroke: 4, strokeColor: '#ffd23f', flip: i % 3 === 0 }); g.restore(); } });
+  g.restore();
+  big('KEINE CHANCE', 330, 110, '#ffffff', kin(5, .03)(t));
+  stamp('ALLES BESETZT', 540, 1400, 74, '#ff3b4a', p(t, pl + 1.1, pl + 1.4));
+};
+SC[6] = t => {   // Zeitraffer: Sonne rast auf, Dinos verschwinden, Plätze werden frei
+  const u = t - S_[6][0], k = p(t, S_[6][0], S_[7][0]), fr0 = ph('wurde Platz frei');
+  const sky = mix([20, 30, 80], [255, 190, 90], eo(k));
+  bg([[0, rgb(sky)], [1, rgb(mix([10, 20, 50], [255, 120, 80], eo(k)))]]);
+  const sx = lerp(100, 980, k), sy = 1500 - Math.sin(k * Math.PI) * 1100;
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(sx, sy, 300, [255, 220, 120], .9); g.restore(); g.fillStyle = '#fff4c0'; g.beginPath(); g.arc(sx, sy, 80, 0, 7); g.fill();
+  g.save(); g.globalAlpha = .5; for (let i = 0; i < 6; i++) { const x = ((i * 300 + u * 1400) % (W + 600)) - 300; g.fillStyle = '#fff'; g.beginPath(); g.ellipse(x, 300 + i * 90, 180, 30, 0, 0, 7); g.fill(); } g.restore();
+  g.save(); cam(1.05); g.globalAlpha = .9;
+  SPOTS.forEach(([x, y], i) => { const gone = p(t, S_[6][0] + .2 + i * .1, S_[6][0] + .5 + i * .1), free = p(t, fr0 + i * .05, fr0 + i * .05 + .3);
+    if (gone < 1) shape(i % 2 ? NECK : REX, x, y + 140, 130, 110, '#1b2a10', { alpha: 1 - gone });
+    if (free > 0) { g.save(); g.strokeStyle = '#7dff6a'; g.lineWidth = 6; g.setLineDash([12, 10]); g.lineDashOffset = -t * 40; g.shadowColor = '#7dff6a'; g.shadowBlur = 20; g.beginPath(); g.arc(x, y + 140, 55 * eback(free), 0, 7); g.stroke(); g.restore(); } });
+  g.restore();
+  big('DINOS WEG', 330, 110, '#ffffff', kin(6, .03)(t), { sc2: 'rgba(80,30,10,.8)' });
+  big('PLATZ FREI!', 1440, 120, '#7dff6a', p(t, fr0, fr0 + .35), { glow: 'rgba(120,255,100,.6)' });
+};
+SC[7] = t => {   // Morphing: Maus wird Wal, Pferd, Affe, Mensch
+  const u = t - S_[7][0];
+  const stages = [[MOUSE, .0, 'MAUS', [255, 210, 60]], [WHALE, fr(7, 'Wale'), 'WAL', [60, 200, 255]], [HORSE, fr(7, 'Pferde'), 'PFERD', [255, 140, 60]], [APE, fr(7, 'Affen'), 'AFFE', [180, 120, 255]], [HUMAN, fr(7, 'irgendwann') + .02, 'WIR', [255, 90, 200]]];
+  let i = 0; while (i < stages.length - 1 && t >= at(7, stages[i + 1][1])) i++;
+  const nx = stages[Math.min(i + 1, 4)], cur = stages[i], k = i < 4 ? p(t, at(7, nx[1]) - .35, at(7, nx[1])) : 0;
+  const col = mix(cur[3], nx[3], eio(k));
+  bg([[0, rgb(mix(col, [10, 4, 30], .55))], [1, rgb(mix(col, [0, 0, 10], .85))]]);
+  aurora(t, .7);
+  const grow = i === 0 ? lerp(.35, 1, eback(p(t, S_[7][0], at(7, .3)))) : 1, [w, h] = i >= 3 || (i === 2 && k > .5) ? [520, 800] : [820, 560];
+  g.save(); cam(1 + Math.sin(u * 2) * .02, Math.sin(u * 1.3) * .03);
+  morph(cur[0], nx[0], k, 540, 940, w * grow, h * grow, rgb(col), { glow: rgb(col, .8), blur: 60, stroke: 6, strokeColor: 'rgba(255,255,255,.7)' });
+  g.restore();
+  big(cur[2], 380, 150, '#ffffff', p(t, at(7, cur[1]), at(7, cur[1]) + .3), { glow: rgb(cur[3], .8) });
+  big('SÄUGETIERE WACHSEN', 1430, 70, rgb(cur[3]), kin(7, .02)(t), { ls: 2 });
+};
+function globe(x, y, r) {
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 1.7, [60, 160, 255], .4); g.restore();
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#7fd4ff'); gr.addColorStop(.6, '#1f6fd6'); gr.addColorStop(1, '#0c2f7a');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.fillStyle = 'rgba(80,200,120,.9)'; [[-.35, -.2, .32, .22], [.25, .1, .26, .34], [-.1, .45, .2, .14]].forEach(([dx, dy, w, h]) => { g.beginPath(); g.ellipse(x + dx * r, y + dy * r, w * r, h * r, .4, 0, 7); g.fill(); });
+}
+SC[8] = t => {   // Zurückspulen: der Asteroid verfehlt die Erde
+  const u = t - S_[8][0], rw = p(t, S_[8][0], S_[8][0] + 1.1), k = p(t, at(8, .3), S_[9][0] - .2);
+  bg([[0, '#0a0430'], [1, '#2a0a5a']]); stars(t, .9, -u * 2);
+  g.save(); cam(1.05 + u * .02); globe(540, 1000, 230);
+  g.save(); g.strokeStyle = 'rgba(255,200,120,.6)'; g.setLineDash([16, 14]); g.lineWidth = 5; g.beginPath(); g.moveTo(-100, 300); g.quadraticCurveTo(300, 760, 1200, 760); g.stroke(); g.setLineDash([]); g.restore();
+  const e = eio(k), qx = (1 - e) * (1 - e) * -100 + 2 * (1 - e) * e * 300 + e * e * 1200, qy = (1 - e) * (1 - e) * 300 + 2 * (1 - e) * e * 760 + e * e * 760;
+  if (k > 0 && k < 1) asteroid(qx, qy, 70, t, .5);
+  g.restore();
+  if (rw < 1) {   // VHS-Rückspulstreifen
+    g.save(); g.globalAlpha = 1 - rw; for (let i = 0; i < 14; i++) { const y = ((i * 211 + u * 2400) % H); g.fillStyle = i % 2 ? 'rgba(255,255,255,.25)' : 'rgba(120,200,255,.2)'; g.fillRect(0, y, W, 6 + (i % 3) * 8); } g.restore();
+    text('◀◀ ZURÜCKSPULEN', 540, 230, 64, 'IDB', '#ffffff', { alpha: 1 - rw, ls: 4, stroke: 8 });
+  }
+  big('STELL DIR VOR …', 360, 100, '#ffffff', p(t, S_[8][0] + .9, S_[8][0] + 1.25));
+  stamp('VERFEHLT!', 540, 1420, 96, '#7dff6a', p(t, at(8, .82), at(8, .82) + .3), -.08);
+};
+SC[9] = t => {   // Diagramm: mit Asteroid riesig, ohne Asteroid klein
+  const u = t - S_[9][0], sm = ph('Und die Säugetiere');
+  bg([[0, '#0d1b4a'], [1, '#1d0a3a']]);
+  g.save(); g.globalAlpha = .18; g.strokeStyle = '#fff'; g.lineWidth = 2; for (let y = 520; y <= 1300; y += 130) { g.beginPath(); g.moveTo(140, y); g.lineTo(940, y); g.stroke(); } g.restore();
+  g.save(); cam(1.02 + u * .02);
+  bars([{ v: 1, c: [60, 200, 255], label: 'MIT' }, { v: .06, c: [255, 210, 60], label: 'OHNE' }], p(t, sm - .4, sm + 1.2), 140, 1300, 800, 780, { size: 56 });
+  shape(WHALE, 362, 470, 260, 170, '#bfefff', { alpha: eo(p(t, sm + .6, sm + .9)) });
+  shape(MOUSE, 718, 1170, 110, 70, '#ffe7a0', { alpha: eo(p(t, sm + .9, sm + 1.2)) });
+  g.restore();
+  text('ASTEROID', 540, 1440, 44, 'IDX', 'rgba(255,255,255,.8)', { ls: 6, alpha: eo(p(t, sm - .4, sm)) });
+  big('DINOS BLEIBEN', 280, 110, '#7dff6a', kin(9, .03)(t), { alpha: 1 - p(t, sm, sm + .25) });
+  big('SÄUGETIERE', 250, 90, '#ffffff', p(t, sm, sm + .35));
+  big('BLEIBEN KLEIN', 360, 100, '#ffd23f', p(t, sm + .5, sm + .85), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[10] = t => {   // Strichzeichnung: der Dino-Mensch zeichnet sich selbst
+  const u = t - S_[10][0], fo = ph('Ein Forscher');
+  bg([[0, '#06324a'], [1, '#021624']]);
+  g.save(); g.strokeStyle = 'rgba(120,220,255,.14)'; g.lineWidth = 2; for (let x = 0; x <= W; x += 60) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 0; y <= H; y += 60) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.restore();
+  g.save(); cam(1.12 - u * .03, -.02 + u * .01);
+  drawOn(SAUROID, eio(p(t, at(10, .04), S_[11][0])), 540, 980, 620, 1000, '#9fe8ff', 9);
+  g.restore();
+  big('UND DIE DINOS?', 330, 110, '#ffffff', kin(10, .02)(t), { alpha: 1 - p(t, fo - .2, fo) });
+  big('1982', 330, 180, '#ff5ac8', p(t, fo + .4, fo + .75), { glow: 'rgba(255,90,200,.6)', ls: -4 });
+  text('Gedankenspiel eines Forschers', 540, 1460, 46, 'IDS', '#9fe8ff', { alpha: eo(p(t, fo, fo + .4)) });
+};
+SC[11] = t => {   // 3D-Drehung: Dino-Mensch im Neonlicht, Eigenschaften poppen auf
+  const u = t - S_[11][0];
+  bg([[0, '#2a0050'], [1, '#08001a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(540, 980, 600, [180, 60, 255], .5); g.restore();
+  const blink = Math.sin(u * 5) > .6;
+  spin3d(Math.sin(u * 1.5) * 1.05, 540, 980, () => { drawOn(SAUROID, 1, 540, 980, 600, 980, '#c58cff', 26, { spark: false, blur: 40 }); eye(540 - 300 + .45 * 600, 980 - 490 + .12 * 980, blink ? 16 : 13, 0); eye(540 - 300 + .56 * 600, 980 - 490 + .12 * 980, blink ? 16 : 13, 0); });
+  const ga = ph('große Augen');
+  [['AUFRECHT', ph('aufrecht'), 260, 300], ['GROSSE AUGEN', ga, 820, 420], ['HÄNDE', ga + .9, 250, 1250]].forEach(([s, t0, x, y]) => { const k = popIn(p(t, t0, t0 + .35)); if (k > 0) { g.save(); g.translate(x, y); g.scale(k, k); g.fillStyle = '#ffd23f'; g.beginPath(); g.roundRect(-190, -50, 380, 100, 50); g.fill(); g.restore(); text(s, x, y + 2, 46, 'IDB', '#2a0050', { alpha: clamp(k) }); } });
+  big('DINO-MENSCH', 170, 96, '#ffffff', p(t, ph('Ein Dino-Mensch'), ph('Ein Dino-Mensch') + .35), { glow: 'rgba(200,140,255,.7)' });
+  stamp('GEDANKENSPIEL', 540, 1420, 66, '#ff5ac8', p(t, ph('Reines'), ph('Reines') + .3), .06);
+};
+SC[12] = t => {   // Das Verrückte: flüssige Wellen, Schlagzeile
+  const u = t - S_[12][0], na = ph('Ganz ausgestorben');
+  bg([[0, '#ff3a8a'], [1, '#5a0a8a']]);
+  liquid(t, [[255, 120, 200], [120, 60, 255], [40, 220, 255], [20, 10, 60]], { y0: 1050, gap: 160, amp: 60 });
+  big('DAS', 520, 110, '#ffffff', p(t, S_[12][0] + .05, S_[12][0] + .35));
+  big('VERRÜCKTE:', 680, 150, '#ffd23f', p(t, S_[12][0] + .25, S_[12][0] + .6), { glow: 'rgba(255,210,60,.8)', from: 2.6 });
+  big('NICHT GANZ', 880, 100, '#ffffff', p(t, na + .3, na + .65), { rot: Math.sin(u * 3) * .03 });
+  big('AUSGESTORBEN!', 1000, 110, '#7af0ff', p(t, na + .6, na + .95), { glow: 'rgba(120,240,255,.7)' });
+};
+SC[13] = t => {   // Kamerafahrt durch Wolkenebenen, Vogelschwarm
+  const u = t - S_[13][0];
+  bg([[0, '#2a8cff'], [.6, '#8fd0ff'], [1, '#ffe0f0']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(860, 360, 300, [255, 240, 200], .6); g.restore();
+  const cloud = (x, y, s, a) => { g.fillStyle = `rgba(255,255,255,${a})`; [[0, 0, 1], [-.7, .15, .7], [.7, .1, .8], [.2, -.35, .7]].forEach(([dx, dy, r]) => { g.beginPath(); g.arc(x + dx * s, y + dy * s, r * s, 0, 7); g.fill(); }); };
+  parallax([
+    { depth: .3, draw: o => { for (let i = 0; i < 5; i++) cloud(((i * 330 - o) % (W + 500) + W + 500) % (W + 500) - 250, 520 + (i % 3) * 120, 90, .55); } },
+    { depth: 1, draw: o => { for (let i = 0; i < 18; i++) { const x = ((i * 140 + Math.sin(i) * 60 - o * .6) % (W + 300) + W + 300) % (W + 300) - 150, y = 820 + (i % 6) * 70 + Math.sin(u * 2 + i) * 20 - Math.abs(i - 9) * 18; birdV(x, y, 34 + (i % 3) * 8, u * 10 + i, '#1a1040'); } } },
+    { depth: 2.4, draw: o => { for (let i = 0; i < 4; i++) cloud(((i * 520 - o) % (W + 900) + W + 900) % (W + 900) - 450, 1420 + (i % 2) * 160, 220, .9); } },
+  ], u * 380);
+  const vg = ph('die Vögel'), st = ph('Sie stammen');
+  big('EINE GRUPPE', 300, 100, '#ffffff', kin(13, .02)(t), { sc2: 'rgba(20,40,120,.8)' });
+  big('HAT ÜBERLEBT', 430, 120, '#ffd23f', kin(13, .12)(t), { sc2: 'rgba(20,40,120,.8)' });
+  big('DIE VÖGEL', 1200, 170, '#ffd23f', p(t, vg, vg + .3), { glow: 'rgba(255,255,255,.6)', sc2: 'rgba(20,40,120,.9)' });
+  big('NACHFAHREN DER DINOS', 1360, 64, '#ffffff', p(t, st + .3, st + .65), { ls: 1, sc2: 'rgba(20,40,120,.9)' });
+};
+SC[14] = t => {   // Röntgen-Scan: T-Rex schrumpft zum Vogel
+  const u = t - S_[14][0], kl = ph('Sie sind nur klein'), scanY = lerp(500, 1450, (u * .55) % 1), k = p(t, kl - .2, kl + 2);
+  bg([[0, '#001a2a'], [1, '#00080f']]);
+  g.save(); g.strokeStyle = 'rgba(80,255,220,.08)'; for (let y = 0; y < H; y += 8) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.restore();
+  const s = lerp(1, .6, eio(k)), draw = (fill, o = {}) => morph(REX, BIRD, k, 540, 980, 860 * s, 740 * s, fill, o);
+  g.save(); cam(1.03 + u * .02); draw('rgba(80,255,220,.18)', { stroke: 5, strokeColor: '#50ffdc', glow: 'rgba(80,255,220,.6)' });
+  g.save(); g.beginPath(); g.rect(0, scanY - 90, W, 180); g.clip(); draw('rgba(200,255,245,.75)', { glow: '#fff' }); g.restore();
+  g.restore();
+  g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(80,255,220,.5)'; g.fillRect(0, scanY - 3, W, 6); glow(540, scanY, 300, [80, 255, 220], .2); g.restore();
+  big('NIE GANZ WEG', 330, 110, '#50ffdc', kin(14, .02)(t), { alpha: 1 - p(t, kl, kl + .3) });
+  big('KLEINER', 290, 110, '#ffd23f', p(t, kl + .3, kl + .65), { glow: 'rgba(255,210,60,.6)' });
+  big('+ FLÜGEL', 420, 110, '#ffffff', p(t, kl + 1.3, kl + 1.65));
+};
+SC[15] = t => {   // Pointe: Dino auf dem Balkon, langsamer Zoom
+  const u = t - S_[15][0];
+  bg([[0, '#ffb07a'], [.5, '#ff7aa8'], [1, '#6a3ab0']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(300, 500, 380, [255, 230, 160], .6); g.restore();
+  g.save(); cam(1 + eio(p(u, 0, 3)) * .35, 0, 640, 1060);
+  g.fillStyle = 'rgba(70,30,90,.45)'; for (let i = 0; i < 6; i++) g.fillRect(i * 190, 760 - (i % 3) * 140, 150, 900);
+  g.fillStyle = '#3a1a4a'; g.fillRect(0, 1180, W, 30); for (let x = 20; x < W; x += 70) g.fillRect(x, 1210, 16, 320); g.fillRect(0, 1520, W, 30);
+  const bob = Math.abs(Math.sin(u * 5)) * 10;
+  g.save(); g.translate(640, 1110 - bob * .3); shape(BIRD, 0, 0, 220, 170, '#5a5a7a', { stroke: 4, strokeColor: '#c8c8e8' }); g.fillStyle = '#ff8a3a'; g.beginPath(); g.arc(50, -60, 8, 0, 7); g.fill(); g.restore();
+  g.restore();
+  big('DER NÄCHSTE DINO', 300, 92, '#ffffff', kin(15, .02)(t), { sc2: 'rgba(80,20,80,.85)' });
+  big('AUF DEINEM BALKON', 430, 80, '#ffd23f', kin(15, .55)(t), { sc2: 'rgba(80,20,80,.85)' });
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(30,6,40,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '160px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-5px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#7dff6a'); gr.addColorStop(.5, '#ffd23f'); gr.addColorStop(1, '#ff5ac8');
+    g.fillStyle = gr; g.translate(540, 840); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('DINOS', 0, -90); g.fillText('LEBEN.', 0, 90); g.restore();
+    text('Schau mal aus dem Fenster.', 540, 1080, 48, 'IDS', '#ffffff', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+};
+function scene(t) {
+  let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
+  SC[i](t);
+}
+</script>
+</body></html>

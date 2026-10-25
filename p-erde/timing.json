@@ -1,0 +1,116 @@
+{
+ "dur": 28.965,
+ "sentences": [
+  [
+   0.55,
+   3.86
+  ],
+  [
+   4.605,
+   9.785
+  ],
+  [
+   10.135,
+   14.899
+  ],
+  [
+   15.249,
+   19.507
+  ],
+  [
+   19.857,
+   24.517
+  ],
+  [
+   24.867,
+   27.165
+  ]
+ ],
+ "phrases": [
+  [
+   0.55,
+   1.18,
+   "Was wäre,"
+  ],
+  [
+   1.18,
+   3.42,
+   "wenn die Erde plötzlich aufhört,"
+  ],
+  [
+   3.42,
+   3.86,
+   "sich zu drehen?"
+  ],
+  [
+   4.605,
+   9.785,
+   "Am Äquator drehen wir uns mit rund sechzehnhundertsiebzig Kilometern pro Stunde."
+  ],
+  [
+   10.135,
+   11.325,
+   "Stoppt der Boden,"
+  ],
+  [
+   11.325,
+   13.123,
+   "fliegt alles weiter:"
+  ],
+  [
+   12.95,
+   13.45,
+   "Luft,"
+  ],
+  [
+   13.5,
+   14.1,
+   "Ozeane,"
+  ],
+  [
+   14.15,
+   14.6,
+   "Häuser,"
+  ],
+  [
+   14.65,
+   14.9,
+   "du."
+  ],
+  [
+   15.249,
+   15.739,
+   "Stürme,"
+  ],
+  [
+   15.739,
+   17.769,
+   "schneller als jedes Flugzeug,"
+  ],
+  [
+   17.769,
+   19.507,
+   "würden über den Planeten fegen."
+  ],
+  [
+   19.857,
+   22.237,
+   "Und ein Tag würde ein Jahr dauern:"
+  ],
+  [
+   22.237,
+   23.567,
+   "sechs Monate Sonne,"
+  ],
+  [
+   23.567,
+   24.517,
+   "sechs Monate Nacht."
+  ],
+  [
+   24.867,
+   27.165,
+   "Zum Glück nur ein Gedankenexperiment."
+  ]
+ ]
+}

@@ -1,0 +1,259 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [0])[0];   // Startzeit des Teilsatzes mit diesem Wort
+const POP = at(0, .75);   // der Mond zerplatzt im Hook
+window.CFG = {
+  REPL: [['ein Drittel', '1/3'], ['vier Zentimeter', '4 Zentimeter']],
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(Mond|verschwindet|harmlos|verlässt|stockdunkel|Sonne|Meer|Ebbe|Flut|zieht|1\/3|Tiere|Korallen|Mondkalender|Taktgeber|lange|Erdachse|schräg|Jahreszeiten|stabil|Kreisel|Taumeln|extremen|Versprechen|wirklich|4|Zentimeter|Laserstrahlen|Panik|Milliarden)/,
+  split: t => 24 * (1 - p(t, 0, .6)) + 34 * Math.max(0, 1 - Math.abs(t - POP) / .3) + 22 * Math.max(0, 1 - Math.abs(t - ph('Ist es aber')) / .25) + 18 * Math.max(0, 1 - Math.abs(t - S_[12][0]) / .3),
+  shake: t => (t > POP && t < POP + .7 ? 20 * (1 - (t - POP) / .7) : 0) + (t > S_[12][0] && t < S_[13][0] ? 4 + 3 * Math.sin(t * 7) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || 'rgba(10,6,30,.85)', rot: o.rot }); }
+const kin = (i, f, d = .35) => t => p(t, at(i, f), at(i, f) + d);
+const pw = (w, d = .35, off = 0) => t => p(t, ph(w) + off, ph(w) + off + d);
+
+// ---------- Bausteine ----------
+const CRATERS = [[-.3, -.2, .18], [.25, .15, .24], [-.05, .45, .12], [.35, -.35, .1], [-.45, .25, .09], [.05, -.05, .08]];
+function moon(x, y, r, a = 1, o = {}) {
+  if (a <= 0) return;
+  g.save(); g.globalAlpha *= a;
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 2.4, o.halo || [190, 200, 255], .45); g.restore();
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#ffffff'); gr.addColorStop(.7, '#d8dcef'); gr.addColorStop(1, '#a8aecb');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.fillStyle = 'rgba(120,125,160,.45)'; CRATERS.forEach(([dx, dy, cr]) => { g.beginPath(); g.arc(x + dx * r, y + dy * r, cr * r, 0, 7); g.fill(); });
+  g.restore();
+}
+function globe(x, y, r, o = {}) {
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 1.6, [60, 160, 255], .35); g.restore();
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#7fd4ff'); gr.addColorStop(.6, '#1f6fd6'); gr.addColorStop(1, '#0c2f7a');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, 7); g.clip(); const sp = o.spin || 0; g.fillStyle = o.land || 'rgba(80,210,120,.92)';
+  [[-.35, -.2, .32, .22], [.25, .1, .26, .34], [-.1, .45, .2, .14], [.7, -.4, .22, .16], [-.8, .2, .2, .3]].forEach(([dx, dy, w, h]) => { const xx = ((dx + sp + 1.5) % 3) - 1.5; g.beginPath(); g.ellipse(x + xx * r, y + dy * r, w * r, h * r, .4, 0, 7); g.fill(); });
+  g.restore();
+}
+function sunDisc(x, y, r) { g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 3, [255, 170, 60], .6); g.restore(); g.fillStyle = '#ffe27a'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+function nightSky(t, top = '#060a2a', bot = '#140a3a') { bg([[0, top], [1, bot]]); stars(t, .9); }
+function houses(t, lit = 1) {
+  const R = rng(3);
+  for (let i = 0; i < 9; i++) {
+    const w = 110 + R() * 60, h = 260 + R() * 340, x = i * 125 - 20;
+    g.fillStyle = '#0e1030'; g.fillRect(x, 1500 - h, w, h + 420);
+    for (let r = 0; r < 6; r++) for (let c = 0; c < 2; c++) { if (R() < .4) continue; const wy = 1500 - h + 40 + r * 60; if (wy > 1480) continue; g.fillStyle = `rgba(255,210,120,${lit * (.6 + .4 * Math.sin(t + r + c))})`; g.fillRect(x + 20 + c * 45, wy, 26, 32); }
+  }
+}
+
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+SC[0] = t => {   // Hook: Vollmond, Zoom-Punch, dann zerplatzt er in Pixel
+  nightSky(t, '#1a0a4a', '#3a0a5a'); aurora(t, .7, [[120, 90, 255], [40, 230, 210], [255, 60, 200]]);
+  g.save(); cam(1.3 - eo(p(t, 0, .6)) * .25 + (punch(t, .35, .15) - 1), t * .03);
+  dissolve(p(t, POP, POP + 1.2), () => moon(540, 900, 330, 1), { sweep: .4, dir: [0, -1] });
+  g.restore();
+  if (t > POP) { burst(t, POP, 540, 900, { scale: 1.1, col: [220, 225, 255] }); const f = 1 - p(t, POP, POP + .3); g.fillStyle = `rgba(255,255,255,${f * .8})`; g.fillRect(0, 0, W, H); }
+  big('WAS WÄRE, WENN', 280, 96, '#ffffff', p(t, .2, .55));
+  big('DER MOND', 1250, 150, '#c8d0ff', p(t, at(0, .35), at(0, .35) + .3), { glow: 'rgba(200,210,255,.6)' });
+  big('VERSCHWINDET?', 1400, 110, '#ffd23f', p(t, at(0, .7), at(0, .7) + .3), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[1] = t => {   // Kinetische Typo: harmlos? Nein! Dann driftet der Mond davon (Open Loop)
+  const u = t - S_[1][0], no = ph('Ist es aber'), loop = ph('Und am Ende');
+  if (t < loop) {
+    bg([[0, '#ffd23f'], [1, '#ff8a2a']]);
+    big('KLINGT', 700, 120, '#2a0a3a', kin(1, .02)(t), { rot: -.06, sc2: 'rgba(255,255,255,.8)' });
+    big('HARMLOS', 860, 170, '#2a0a3a', kin(1, .1)(t), { rot: -.06, sc2: 'rgba(255,255,255,.8)', alpha: 1 - p(t, no, no + .1) });
+    if (t > no) { g.fillStyle = '#ff2a4a'; g.fillRect(0, 0, W, H); big('IST ES', 760, 130, '#ffffff', p(t, no, no + .25)); big('NICHT!', 940, 220, '#ffffff', p(t, no + .25, no + .5), { from: 3 }); }
+  } else {
+    nightSky(t); const k = eio(p(t, loop, S_[2][0]));
+    globe(540, 1500, 380, { spin: u * .05 });
+    moon(lerp(700, 860, k), lerp(900, 380, k), lerp(110, 40, k));
+    g.save(); g.strokeStyle = 'rgba(255,255,255,.4)'; g.setLineDash([12, 12]); g.lineWidth = 4; g.beginPath(); g.moveTo(700, 900); g.lineTo(lerp(700, 860, k), lerp(900, 380, k)); g.stroke(); g.restore();
+    big('ER VERLÄSST UNS', 300, 96, '#ffffff', p(t, loop + .6, loop + .95));
+    big('WIRKLICH.', 430, 110, '#ffd23f', p(t, loop + 1.6, loop + 1.95), { glow: 'rgba(255,210,60,.6)' });
+  }
+};
+SC[2] = t => {   // Spotlight zieht sich zusammen: die Nacht wird stockdunkel
+  const u = t - S_[2][0], k = eio(p(t, at(2, .35), at(2, .85)));
+  nightSky(t, '#0a1450', '#1a1050');
+  g.save(); g.globalAlpha = 1 - k; moon(780, 420, 120, 1); g.restore();
+  g.save(); cam(1.03 + u * .02); houses(t, 1 - k * .7); g.restore();
+  g.save(); const r = lerp(1400, 160, k); const v = g.createRadialGradient(540, 1100, r * .6, 540, 1100, r); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,8,.97)'); g.fillStyle = v; g.fillRect(0, 0, W, H); g.restore();
+  big('STOCKDUNKEL', 1400, 120, '#ffffff', kin(2, .5)(t), { glow: 'rgba(160,180,255,.5)' });
+  big('NACHT 1', 300, 96, '#9fb4ff', kin(2, .02)(t), { ls: 4 });
+};
+SC[3] = t => {   // Strichzeichnung: Lichtweg Sonne → Mond → Erde zeichnet sich selbst
+  const u = t - S_[3][0], ref = ph('Er spiegelt');
+  bg([[0, '#04163a'], [1, '#020814']]);
+  g.save(); g.strokeStyle = 'rgba(120,200,255,.1)'; g.lineWidth = 2; for (let x = 0; x <= W; x += 60) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } g.restore();
+  g.save(); cam(1.04 - u * .01);
+  sunDisc(180, 620, 110); moon(860, 760, 90, 1); globe(380, 1270, 150, { spin: u * .1 });
+  drawOn([[[.1, .1], [.9, .25]]], eio(p(t, ref, ref + .9)), 540, 640, 900, 900, '#ffd23f', 12);
+  drawOn([[[.9, .25], [.33, .8]]], eio(p(t, ref + .9, ref + 1.8)), 540, 640, 900, 900, '#ffffff', 12);
+  g.restore();
+  big('LEUCHTET NICHT', 300, 100, '#ffffff', kin(3, .02)(t));
+  big('SELBST', 420, 110, '#ff8a8a', kin(3, .15)(t));
+  big('NUR SPIEGEL', 1440, 90, '#ffd23f', p(t, ref + .4, ref + .75), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[4] = t => {   // Kamera taucht durch flüssige Wellen ins Meer
+  const u = t - S_[4][0], dive = eio(p(t, at(4, .3), S_[5][0]));
+  bg([[0, rgb(mix([120, 200, 255], [10, 40, 120], dive))], [1, rgb(mix([40, 120, 220], [4, 10, 50], dive))]]);
+  g.save(); g.translate(0, -dive * 900); liquid(t, [[60, 170, 255], [30, 130, 230], [20, 90, 200], [10, 50, 150]], { y0: 1050, gap: 140, amp: 50 }); g.fillStyle = 'rgb(10,50,150)'; g.fillRect(0, 1700, W, 1400); g.restore();
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 40; i++) { const x = (i * 173) % W, y = ((i * 311) - u * 500 * (1 + i % 3)) % H; glow(x, (y + H) % H, 8 + (i % 4) * 4, [180, 230, 255], .4 * dive); } g.restore();
+  big('UND DAS MEER?', 330, 120, '#ffffff', kin(4, .02)(t), { sc2: 'rgba(10,30,80,.85)' });
+};
+SC[5] = t => {   // Morphing: Wasserhülle wird zum Ei, der Mond zieht daran
+  const u = t - S_[5][0], k = eio(p(t, at(5, .2), at(5, .7)));
+  bg([[0, '#0a2a6a'], [1, '#020a2a']]); stars(t, .6);
+  const mx = 900, my = 960;
+  g.save(); g.fillStyle = 'rgba(60,170,255,.55)'; g.shadowColor = 'rgba(60,170,255,.8)'; g.shadowBlur = 40; g.beginPath(); g.ellipse(420, 960, 270 + k * 110, 270 - k * 40, 0, 0, 7); g.fill(); g.restore();
+  globe(420, 960, 240, { spin: u * .1 });
+  moon(mx + Math.sin(u * 2) * 10, my, 70, 1);
+  for (let i = 0; i < 3; i++) { const o = ((u * 1.2 + i / 3) % 1); arrow(lerp(820, 720, o), 960 + (i - 1) * 90 * (1 - o), lerp(780, 680, o) + 40, 960 + (i - 1) * 90 * (1 - o), [255, 210, 60], 8, k * Math.sin(o * Math.PI)); }
+  big('DER MOND ZIEHT', 300, 100, '#ffffff', kin(5, .2)(t));
+  big('EBBE & FLUT', 1440, 110, '#7af0ff', kin(5, .02)(t), { glow: 'rgba(120,240,255,.6)' });
+};
+SC[6] = t => {   // Balkendiagramm: Gezeiten schrumpfen auf 1/3
+  const u = t - S_[6][0], sh = ph('Die Gezeiten'), k = eio(p(t, sh, sh + 1.2));
+  bg([[0, '#003a5a'], [1, '#001a2a']]);
+  g.save(); g.globalAlpha = .18; g.strokeStyle = '#fff'; g.lineWidth = 2; for (let y = 560; y <= 1300; y += 120) { g.beginPath(); g.moveTo(140, y); g.lineTo(940, y); g.stroke(); } g.restore();
+  bars([{ v: 1, c: [80, 160, 255], label: 'MIT MOND' }, { v: lerp(1, .33, k), c: [255, 210, 60], label: 'OHNE' }], p(t, S_[6][0], S_[6][0] + 1), 140, 1300, 800, 700, { size: 46 });
+  sunDisc(720, 470, 40 * eo(p(t, at(6, .1), at(6, .3))));
+  big('NUR NOCH DIE SONNE', 300, 84, '#ffd23f', kin(6, .05)(t), { alpha: 1 - p(t, sh, sh + .2) });
+  big(Math.round(lerp(100, 33, k)) + ' %', 300, 170, '#ffffff', p(t, sh, sh + .3), { ls: -4, glow: 'rgba(255,255,255,.4)' });
+  text('Höhe der Gezeiten', 540, 1440, 46, 'IDS', 'rgba(255,255,255,.85)');
+};
+const POLYP = (() => { const r = rng(17); return Array.from({ length: 90 }, () => ({ x: r() * W, d: r(), sp: .4 + r() * .8, c: [[255, 120, 200], [255, 220, 120], [255, 160, 90], [180, 255, 220]][(r() * 4) | 0] })); })();
+SC[7] = t => {   // Korallen laichen: Partikel steigen auf, Mondkalender-Icons poppen auf
+  const u = t - S_[7][0], cal = ph('Viele Korallen');
+  bg([[0, '#08306a'], [1, '#2a0a4a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; POLYP.forEach(pp => { const y = 1600 - ((u * 220 * pp.sp + pp.d * 1200) % 1300); glow(pp.x + Math.sin(u * 2 + pp.d * 9) * 20, y, 16, pp.c, .7 * p(t, cal, cal + .6)); }); g.restore();
+  for (let i = 0; i < 10; i++) { const x = 80 + i * 103, h = 120 + (i * 53) % 90; g.fillStyle = rgb(SPEC[(i * 2) % 7], .9); g.beginPath(); g.moveTo(x - 30, 1700); g.quadraticCurveTo(x - 40, 1700 - h, x, 1700 - h - 40); g.quadraticCurveTo(x + 40, 1700 - h, x + 30, 1700); g.fill(); }
+  for (let i = 0; i < 5; i++) { const k = popIn(p(t, cal + .3 + i * .15, cal + .65 + i * .15)); if (k <= 0) continue; const x = 220 + i * 160, y = 640; g.save(); g.translate(x, y); g.scale(k, k); g.fillStyle = '#e8ecff'; g.beginPath(); g.arc(0, 0, 48, 0, 7); g.fill(); g.fillStyle = '#08306a'; g.beginPath(); g.arc(-48 + i * 24, 0, 48, 0, 7); g.fill(); g.restore(); }
+  big('AUCH DIE TIERE', 300, 100, '#ffffff', kin(7, .02)(t));
+  big('MONDKALENDER', 1440, 100, '#ffb0e0', p(t, cal + .6, cal + .95), { glow: 'rgba(255,150,220,.6)' });
+};
+SC[8] = t => {   // Pendeluhr bleibt stehen, Farbe wird entzogen
+  const u = t - S_[8][0], stop = eio(p(t, S_[8][0] + .2, S_[9][0] - .3));
+  const sat = 1 - stop;
+  bg([[0, rgb(mix([120, 120, 130], [255, 120, 200], sat))], [1, rgb(mix([40, 40, 50], [80, 20, 120], sat))]]);
+  const ang = Math.sin(u * 5) * .6 * (1 - stop);
+  g.save(); g.translate(540, 520); g.rotate(ang); g.strokeStyle = '#ffffff'; g.lineWidth = 12; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 700); g.stroke(); moon(0, 760, 110, 1, { halo: [255, 255, 255] }); g.restore();
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(540, 520, 24, 0, 7); g.fill();
+  big('KEIN TAKT', 300, 130, '#ffffff', kin(8, .25)(t));
+  big('MEHR', 1440, 110, '#ffd23f', kin(8, .55)(t), { alpha: sat * .7 + .3 });
+};
+SC[9] = t => {   // Warp-Zeitreise: Millionen Jahre in die Zukunft
+  const u = t - S_[9][0], ax = ph('Dafür müssen');
+  bg([[0, '#20005a'], [1, '#000020']]);
+  warp(u, 2.4 * (1 - p(t, ax, ax + 1)), 1);
+  const n = Math.round(1e6 * eio(p(t, S_[9][0] + .2, ax)));
+  big('+' + n.toLocaleString('de-DE'), 900, 140, '#ffffff', kin(9, .02)(t), { ls: -4, glow: 'rgba(180,140,255,.8)', alpha: 1 - p(t, ax, ax + .25) });
+  big('JAHRE', 1040, 70, '#c8a8ff', kin(9, .05)(t), { ls: 8, alpha: 1 - p(t, ax, ax + .25) });
+  const ek = eback(p(t, ax, ax + .6)); if (ek > 0) { g.save(); g.translate(540, 980); g.scale(ek, ek); g.rotate(.41); globe(0, 0, 200); g.strokeStyle = '#ff5a8a'; g.lineWidth = 10; g.beginPath(); g.moveTo(0, -300); g.lineTo(0, 300); g.stroke(); g.restore(); }
+  big('DIE ERDACHSE', 330, 110, '#ffd23f', p(t, ax + .3, ax + .65), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[10] = t => {   // Umlaufbahn mit Jahreszeiten: vier Positionen poppen nacheinander auf
+  const u = t - S_[10][0], js = ph('Und genau');
+  bg([[0, '#0a0a3a'], [1, '#1a0a3a']]); stars(t, .6);
+  g.save(); g.strokeStyle = 'rgba(255,255,255,.3)'; g.setLineDash([16, 14]); g.lineWidth = 4; g.beginPath(); g.ellipse(540, 980, 400, 230, 0, 0, 7); g.stroke(); g.setLineDash([]); g.restore();
+  sunDisc(540, 980, 80);
+  [['SOMMER', [255, 160, 60]], ['HERBST', [255, 110, 70]], ['WINTER', [140, 200, 255]], ['FRÜHLING', [120, 230, 120]]].forEach(([s, c], i) => {
+    const a = -Math.PI / 2 + i * Math.PI / 2 + u * .15, x = 540 + Math.cos(a) * 400, y = 980 + Math.sin(a) * 230, k = popIn(p(t, js + .2 + i * .25, js + .55 + i * .25));
+    g.save(); g.translate(x, y); g.scale(.6 + .4 * Math.max(k, p(t, S_[10][0], S_[10][0] + .4)), .6 + .4 * Math.max(k, p(t, S_[10][0], S_[10][0] + .4))); g.rotate(.41); globe(0, 0, 70); g.strokeStyle = '#ff5a8a'; g.lineWidth = 6; g.beginPath(); g.moveTo(0, -110); g.lineTo(0, 110); g.stroke(); g.restore();
+    if (k > 0) text(s, x, y + 120, 40, 'IDB', rgb(c), { alpha: clamp(k), sc: k });
+  });
+  big('SCHRÄG: 23°', 300, 110, '#ffffff', kin(10, .02)(t));
+  big('= JAHRESZEITEN', 1440, 96, '#ffd23f', p(t, js + .3, js + .65));
+};
+SC[11] = t => {   // 3D-Drehung: Kreisel wird von einer Hand ruhig gehalten
+  const u = t - S_[11][0], hand = ph('so wie');
+  bg([[0, '#ff9a3a'], [1, '#ff3a6a']]);
+  g.save(); g.translate(540, 1100); g.rotate(Math.sin(u * 2) * .05);
+  spin3d(u * 9, 0, 0, () => {
+    g.fillStyle = '#5a1aa8'; g.beginPath(); g.moveTo(-220, -60); g.lineTo(220, -60); g.lineTo(0, 260); g.closePath(); g.fill();
+    g.fillStyle = '#ffd23f'; g.fillRect(-220, -90, 440, 40); g.fillStyle = '#7af0ff'; g.fillRect(-60, -90, 40, 40); g.fillStyle = '#ff5ac8'; g.fillRect(60, -90, 40, 40);
+  }, { skew: .04 });
+  g.fillStyle = '#2a0a3a'; g.fillRect(-14, -380, 28, 300);
+  g.restore();
+  const hk = eo(p(t, hand, hand + .6));
+  if (hk > 0) { g.save(); g.translate(540 + (1 - hk) * 500, 690); g.fillStyle = '#ffd7b0'; g.beginPath(); g.roundRect(20, -40, 260, 90, 40); g.fill(); g.beginPath(); g.roundRect(-10, -60, 90, 40, 20); g.fill(); g.beginPath(); g.roundRect(-10, 20, 90, 40, 20); g.fill(); g.restore(); }
+  big('DER MOND', 300, 120, '#ffffff', kin(11, .02)(t), { sc2: 'rgba(80,10,40,.85)' });
+  big('HÄLT SIE STABIL', 430, 96, '#2a0a3a', kin(11, .15)(t), { sc2: 'rgba(255,255,255,.85)' });
+};
+SC[12] = t => {   // Split-Screen Winter | Sommer, die Achse taumelt
+  const u = t - S_[12][0], ex = ph('Mit extremen'), sw = Math.sin(u * 2.2) * lerp(.2, .9, p(t, S_[12][0], ex));
+  splitScreen(p(t, ex - .2, ex + .4), () => { bg([[0, '#bfe8ff'], [1, '#5aa0e0']]); for (let i = 0; i < 60; i++) { const x = (i * 97 + u * 40) % W, y = (i * 211 + u * 300) % H; g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 6, 0, 7); g.fill(); } text('−60 °C', 280, 1380, 80, 'IDB', '#ffffff', { stroke: 8, strokeColor: 'rgba(20,60,120,.8)' }); },
+    () => { bg([[0, '#ffb040'], [1, '#ff3a2a']]); g.save(); g.globalCompositeOperation = 'lighter'; glow(800, 600, 400, [255, 230, 120], .7); g.restore(); text('+60 °C', 800, 1380, 80, 'IDB', '#ffffff', { stroke: 8, strokeColor: 'rgba(120,20,10,.8)' }); }, { line: '#ffffff', tilt: 60 });
+  if (t < ex + .4) { const a = 1 - p(t, ex, ex + .4); g.save(); g.globalAlpha = a; nightSky(t); g.restore(); }
+  g.save(); g.translate(540, 960); g.rotate(sw); globe(0, 0, 220, { spin: u * .3 }); g.strokeStyle = '#ff5a8a'; g.lineWidth = 12; g.beginPath(); g.moveTo(0, -340); g.lineTo(0, 340); g.stroke(); g.restore();
+  big('TAUMELN', 300, 150, '#ffffff', kin(12, .05)(t), { rot: sw * .2 });
+};
+SC[13] = t => {   // Iris öffnet zurück auf den Mond: das Versprechen
+  const u = t - S_[13][0], pr = ph('Der Mond entfernt');
+  bg([[0, '#ff2a6a'], [1, '#5a0040']]);
+  big('MEIN', 700, 110, '#ffffff', p(t, S_[13][0] + .05, S_[13][0] + .35));
+  big('VERSPRECHEN', 860, 140, '#ffd23f', p(t, S_[13][0] + .3, S_[13][0] + .65), { glow: 'rgba(255,210,60,.8)', from: 2.6 });
+  iris(p(t, pr - .2, pr + .5), 540, 900, () => {
+    nightSky(t); globe(540, 1550, 420, { spin: u * .05 });
+    const k = p(t, pr, S_[14][0]); moon(540, lerp(760, 600, k), lerp(150, 120, k));
+    big('ER ENTFERNT SICH', 300, 96, '#ffffff', p(t, pr + .3, pr + .65));
+    big('WIRKLICH', 420, 120, '#ffd23f', p(t, pr + 1, pr + 1.35), { glow: 'rgba(255,210,60,.6)' });
+  }, { ring: '#ffffff' });
+};
+SC[14] = t => {   // Laser zum Mond, Maßband zählt 3,8 cm
+  const u = t - S_[14][0], las = ph('Das haben'), k = eio(p(t, S_[14][0] + .1, at(14, .4)));
+  nightSky(t, '#020418', '#0a0430');
+  globe(260, 1550, 300, { spin: u * .05 });
+  moon(860, 500, 120, 1);
+  const lk = p(t, las, las + .7); if (lk > 0) { beam(330, 1280, lerp(330, 820, lk), lerp(1280, 560, lk), 6, [80, 255, 120]); if (lk >= 1 && Math.sin(t * 20) > 0) { g.save(); g.globalCompositeOperation = 'lighter'; glow(820, 560, 60, [80, 255, 120], .9); g.restore(); } }
+  g.save(); g.translate(140, 860); g.fillStyle = '#ffd23f'; g.fillRect(0, 0, 800 * k, 90); g.fillStyle = '#2a1a00'; for (let i = 0; i <= 38 * k; i++) g.fillRect(i * 21, 0, 3, i % 5 ? 30 : 55); g.restore();
+  big((3.8 * k).toFixed(1).replace('.', ',') + ' cm', 760, 150, '#ffffff', kin(14, .02)(t), { ls: -3, glow: 'rgba(255,210,60,.5)' });
+  big('PRO JAHR', 1080, 80, '#ffd23f', kin(14, .2)(t), { ls: 4 });
+  big('GEMESSEN MIT LASER', 1220, 66, '#7dff6a', p(t, las + .3, las + .65), { ls: 1, x: 620 });
+};
+SC[15] = t => {   // Pointe: ruhige Parallax-Nacht, Endkarte
+  const u = t - S_[15][0];
+  bg([[0, '#1a0a5a'], [.6, '#5a1a8a'], [1, '#ff6a8a']]);
+  parallax([
+    { depth: .2, draw: o => { g.save(); g.translate(-o, 0); stars(t, 1); g.restore(); } },
+    { depth: .5, draw: o => moon(700 - o * .5, 560, 150, 1) },
+    { depth: 1.2, draw: o => { g.fillStyle = '#2a0a4a'; g.beginPath(); g.moveTo(0, 1500); for (let x = 0; x <= W; x += 30) g.lineTo(x, 1380 + Math.sin((x + o) / 140) * 60); g.lineTo(W, H); g.lineTo(0, H); g.fill(); } },
+    { depth: 2, draw: o => { g.fillStyle = '#14052a'; g.beginPath(); g.moveTo(0, H); for (let x = 0; x <= W; x += 30) g.lineTo(x, 1560 + Math.sin((x + o) / 90) * 40); g.lineTo(W, H); g.fill(); } },
+  ], u * 60);
+  big('KEINE PANIK', 300, 110, '#ffffff', kin(15, .02)(t));
+  big('MILLIARDEN JAHRE', 430, 90, '#ffd23f', pw('Wir haben', .35, .5)(t), { glow: 'rgba(255,210,60,.6)' });
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(14,6,40,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    moon(540, 620, 110 * eback(ke), 1);
+    g.save(); g.font = '124px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-5px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#c8d0ff'); gr.addColorStop(.5, '#ffd23f'); gr.addColorStop(1, '#ff7ab8');
+    g.fillStyle = gr; g.translate(540, 980); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('GUTE NACHT,', 0, -85); g.fillText('MOND.', 0, 85); g.restore();
+    text('Schau heute mal hoch.', 540, 1220, 48, 'IDS', '#ffffff', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+};
+function scene(t) {
+  let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
+  SC[i](t);
+}
+</script>
+</body></html>

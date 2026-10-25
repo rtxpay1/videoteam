@@ -1,0 +1,97 @@
+{
+ "dur": 29.755,
+ "sentences": [
+  [
+   0.55,
+   4.329
+  ],
+  [
+   4.679,
+   10.58
+  ],
+  [
+   10.93,
+   14.345
+  ],
+  [
+   14.695,
+   21.943
+  ],
+  [
+   22.293,
+   27.955
+  ]
+ ],
+ "phrases": [
+  [
+   0.55,
+   2.865,
+   "Vom Mond sehen wir immer nur eine Seite."
+  ],
+  [
+   3.191,
+   4.329,
+   "Warum eigentlich?"
+  ],
+  [
+   4.679,
+   5.608,
+   "Viele glauben,"
+  ],
+  [
+   5.608,
+   6.425,
+   "er dreht sich nicht."
+  ],
+  [
+   6.891,
+   7.745,
+   "Doch er dreht sich,"
+  ],
+  [
+   8.046,
+   10.58,
+   "genau einmal pro Umlauf um die Erde."
+  ],
+  [
+   10.93,
+   14.345,
+   "Die Schwerkraft der Erde hat ihn leicht in die Länge gezogen."
+  ],
+  [
+   14.695,
+   17.72,
+   "An dieser Beule hat sie ihn so lange abgebremst,"
+  ],
+  [
+   17.72,
+   19.939,
+   "bis Drehung und Umlauf gleich lang waren:"
+  ],
+  [
+   20.233,
+   21.943,
+   "gut siebenundzwanzig Tage."
+  ],
+  [
+   22.293,
+   23.153,
+   "Und die Rückseite?"
+  ],
+  [
+   23.397,
+   24.215,
+   "Die ist nicht dunkel."
+  ],
+  [
+   24.565,
+   26.644,
+   "Sie bekommt genauso viel Sonne ab,"
+  ],
+  [
+   26.644,
+   27.955,
+   "wir sehen sie nur nie."
+  ]
+ ]
+}

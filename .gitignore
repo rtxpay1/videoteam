@@ -1,0 +1,32 @@
+# Große, wiederherstellbare Dinge (setup.sh holt sie neu)
+tts-env/
+wheels/
+voices/*.onnx
+voices/*.onnx.json
+voices/bernd/
+voices/eva/
+voices/karlsson/
+# Zwischenstände und Renderergebnisse (fertige Videos liegen in der Kneipe)
+*.mp4
+*.webm
+p-*/v/
+p-*/prev/
+p-*/rv/
+p-*/test/
+p-*/alt/
+p-*/*.wav
+p-*/.parts/
+*.log
+_t2/
+probe/
+_entwurf-*/
+p-test1/
+__pycache__/
+p-*/v*/
+p-*/rv*/
+*.jpg
+*.png
+p-*/scene_built.html
+p-*/parts.txt
+p-*/rerender.sh
+p-*/queue.sh

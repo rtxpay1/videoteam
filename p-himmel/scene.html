@@ -1,0 +1,444 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; }
+canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, cv = document.getElementById('c'), g = cv.getContext('2d');
+const DUR = 32.13;
+// Szenengrenzen = Satzanfänge der Sprachspur
+const T = { a: 0, b: 3.31, c: 7.96, d: 12.96, e: 18.16, f: 23.16, end: 30.1 };
+
+// ---------- Helfer ----------
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eo5 = x => 1 - Math.pow(1 - x, 5);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eback = x => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const lerp = (a, b, k) => a + (b - a) * k;
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const mix = (c1, c2, k) => c1.map((v, i) => Math.round(lerp(v, c2[i], k)));
+const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+function text(s, x, y, size, font, fill, o = {}) {
+  g.save();
+  g.font = `${size}px ${font}`; g.textAlign = o.align || 'center'; g.textBaseline = 'middle';
+  if (o.ls != null) g.letterSpacing = o.ls + 'px';
+  g.globalAlpha = o.alpha == null ? 1 : o.alpha;
+  if (o.glow) { g.shadowColor = o.glow; g.shadowBlur = o.blur || 40; }
+  if (o.sc && o.sc !== 1) { g.translate(x, y); g.scale(o.sc, o.sc); x = 0; y = 0; }
+  if (o.mblur) g.filter = `blur(${o.mblur}px)`;
+  g.fillStyle = fill; g.fillText(s, x, y);
+  g.restore();
+}
+function glow(x, y, r, c, a = 1) {
+  const gr = g.createRadialGradient(x, y, 0, x, y, r);
+  gr.addColorStop(0, rgb(c, a)); gr.addColorStop(.35, rgb(c, a * .35)); gr.addColorStop(1, rgb(c, 0));
+  g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+}
+function beam(x1, y1, x2, y2, w, c, a = 1) {
+  g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+  [[w * 6, .08], [w * 2.5, .22], [w, .9]].forEach(([lw, al]) => { g.strokeStyle = rgb(c, al * a); g.lineWidth = lw; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); });
+  g.restore();
+}
+function wave(x1, y1, x2, y2, lambda, amp, phase, c, w, prog = 1, a = 1) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+  g.save(); g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round'; g.lineCap = 'round';
+  const pts = []; const n = Math.max(2, Math.floor(L * prog / 3));
+  for (let i = 0; i <= n; i++) { const s = i / n * L * prog, o = Math.sin(s / lambda * Math.PI * 2 - phase) * amp; pts.push([x1 + ux * s + nx * o, y1 + uy * s + ny * o]); }
+  [[w * 5, .1], [w * 2, .3], [w, 1]].forEach(([lw, al]) => { g.strokeStyle = rgb(c, al * a); g.lineWidth = lw; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); });
+  g.restore();
+}
+
+// ---------- Vorberechnete Daten ----------
+const R = rng(42);
+const STARS = Array.from({ length: 170 }, () => ({ x: R() * W, y: R() * H * .8, s: .6 + R() * 2.2, ph: R() * 6.28, sp: .6 + R() * 2 }));
+const MOL = Array.from({ length: 260 }, () => ({ x: (R() - .5) * W * 1.6, y: (R() - .5) * H * 1.3, z: .25 + R() * .75, ph: R() * 6.28 }));
+const PHOT = Array.from({ length: 70 }, () => ({ a: -Math.PI * (.08 + R() * .84), d: 700 + R() * 700, t0: R() * 4.2, sp: .55 + R() * .5 }));
+const SPEC = [[255, 59, 48], [255, 140, 30], [255, 214, 10], [52, 199, 89], [0, 199, 190], [10, 132, 255], [140, 80, 255]];
+const LAMBDA = [700, 620, 580, 530, 490, 450, 410];
+const NOISE = [0, 1, 2].map(k => { const c = document.createElement('canvas'); c.width = 540; c.height = 960; const x = c.getContext('2d'); const id = x.createImageData(540, 960); const r = rng(7 + k); for (let i = 0; i < id.data.length; i += 4) { const v = r() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; } x.putImageData(id, 0, 0); return c; });
+
+// ---------- Untertitel ----------
+const PHRASES = [
+  [0.55, 2.30, 'Warum ist der Himmel eigentlich blau?'],
+  [3.31, 4.69, 'Sonnenlicht wirkt weiß.'],
+  [4.95, 7.61, 'Doch in ihm stecken alle Farben des Regenbogens.'],
+  [7.96, 11.99, 'Auf dem Weg zu uns trifft es auf Milliarden winziger Luftteilchen.'],
+  [12.96, 14.78, 'Blaues Licht hat kurze Wellen.'],
+  [15.19, 17.81, 'Es wird fast sechsmal stärker gestreut als rotes.'],
+  [18.16, 20.58, 'So verteilt sich das Blau über den ganzen Himmel,'],
+  [20.99, 22.81, 'und kommt aus jeder Richtung bei dir an.'],
+  [23.16, 23.88, 'Und abends?'],
+  [24.33, 26.20, 'Dann ist der Weg durch die Luft so lang,'],
+  [26.20, 28.15, 'dass das Blau unterwegs verloren geht.'],
+  [28.46, 29.88, 'Übrig bleibt Rot.'],
+];
+const KEY = /^(blau|Blau|Farben|Regenbogens|Milliarden|Luftteilchen|kurze|Wellen|sechsmal|Himmel|Richtung|abends|lang|verloren|Rot)\b/;
+const WORDS = [];
+PHRASES.forEach(([a, b, s]) => {
+  const ws = s.split(' '), wt = ws.map(w => w.length + 2), tot = wt.reduce((x, y) => x + y, 0);
+  let acc = a; const chunk = [];
+  ws.forEach((w, i) => { const d = (b - a) * wt[i] / tot; WORDS.push({ w, a: acc, b: acc + d }); acc += d; });
+});
+// Wörter zu Blöcken mit max. 3 Wörtern bzw. 18 Zeichen bündeln
+const CHUNKS = []; { let cur = []; WORDS.forEach((w, i) => { const len = cur.map(x => x.w).join(' ').length + w.w.length; if (cur.length && (cur.length >= 3 || len > 18 || w.a - cur[cur.length - 1].b > .2)) { CHUNKS.push(cur); cur = []; } cur.push(w); if (/[.?,]$/.test(w.w)) { CHUNKS.push(cur); cur = []; } }); if (cur.length) CHUNKS.push(cur); }
+
+function captions(t) {
+  const ch = CHUNKS.find(c => t >= c[0].a - .05 && t < c[c.length - 1].b + .25);
+  if (!ch) return;
+  const size = 76; g.save(); g.font = `${size}px IDB`; g.textBaseline = 'middle';
+  const parts = ch.map(w => w.w), widths = parts.map(s => g.measureText(s).width), sp = 34;
+  const total = widths.reduce((a, b) => a + b, 0) + sp * (parts.length - 1);
+  let x = W / 2 - total / 2; const y = 1560;
+  const inA = eo(p(t, ch[0].a - .05, ch[0].a + .12));
+  ch.forEach((w, i) => {
+    const on = t >= w.a && t < w.b + .05, past = t >= w.b;
+    const key = KEY.test(w.w);
+    const pop = on ? 1 + .05 * Math.sin(p(t, w.a, w.a + .18) * Math.PI) : 1;
+    g.save(); g.translate(x + widths[i] / 2, y + (1 - inA) * 30); g.scale(pop, pop); g.globalAlpha = inA;
+    g.textAlign = 'center';
+    g.lineWidth = 14; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(w.w, 0, 0);
+    g.fillStyle = on ? (key ? '#ffd23f' : '#ffffff') : (past ? (key ? '#ffd23f' : '#f2f2f2') : 'rgba(255,255,255,.55)');
+    if (on && key) { g.shadowColor = 'rgba(255,210,63,.6)'; g.shadowBlur = 30; }
+    g.fillText(w.w, 0, 0); g.restore();
+    x += widths[i] + sp;
+  });
+  g.restore();
+}
+
+// ---------- Szenen ----------
+function sceneA(t) {
+  const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#2b0a6b'); sky.addColorStop(.55, '#0d2a8a'); sky.addColorStop(1, '#06103a');
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  aurora(t, 1);
+  hook(t);
+  STARS.forEach(s => { const a = .35 + .65 * (.5 + .5 * Math.sin(t * s.sp * 2 + s.ph)); g.fillStyle = `rgba(220,230,255,${a * .8})`; g.fillRect(s.x, s.y, s.s, s.s); });
+  const out = eio(p(t, 2.85, 3.31));
+  g.save(); g.translate(W / 2, 900); g.scale(1 + out * .9, 1 + out * .9); g.translate(-W / 2, -900); g.globalAlpha = 1 - out;
+  [['WARUM', .45, 640, 150], ['IST DER', .85, 770, 104], ['HIMMEL', 1.2, 910, 190]].forEach(([s, st, y, sz]) => {
+    const k = p(t, st, st + .42); if (k <= 0) return;
+    text(s, W / 2, y, sz, 'IDB', '#ffffff', { sc: lerp(st < .5 ? 3.2 : 1.5, 1, eback(k)), alpha: clamp(k * 3), mblur: (1 - eo(k)) * 14, ls: -2 });
+  });
+  const kb = p(t, 1.85, 2.35);
+  if (kb > 0) {
+    const y = 1170, sz = 330;
+    g.save(); g.font = `${sz}px IDB`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-8px';
+    const fill = g.createLinearGradient(0, y - 160, 0, y + 160); fill.addColorStop(0, '#ffffff'); fill.addColorStop(.45, '#9fe0ff'); fill.addColorStop(1, '#3d8bff');
+    g.beginPath(); g.rect(0, y + 170 - eo5(kb) * 360, W, 400); g.clip();
+    g.shadowColor = 'rgba(79,157,255,.9)'; g.shadowBlur = 80; g.fillStyle = fill; g.fillText('BLAU?', W / 2, y);
+    g.shadowBlur = 0; g.lineWidth = 10; g.lineJoin = 'round'; g.strokeStyle = '#06103a'; g.strokeText('BLAU?', W / 2, y); g.fillText('BLAU?', W / 2, y);
+    g.restore();
+    g.save(); g.globalCompositeOperation = 'lighter'; glow(W / 2, 1170, 520, [60, 130, 255], .25 * eo(kb)); g.restore();
+  }
+  g.restore();
+}
+
+// Polarlicht-Bänder für farbige Hintergründe
+function aurora(t, a) {
+  g.save(); g.globalCompositeOperation = 'lighter';
+  [[[255, 60, 200], 420, .9, 0], [[40, 230, 210], 760, .7, 2], [[120, 90, 255], 1100, .8, 4]].forEach(([c, y0, sp, ph]) => {
+    for (let k = 0; k < 3; k++) {
+      g.beginPath();
+      for (let x = -40; x <= W + 40; x += 30) { const y = y0 + Math.sin(x / 210 + t * sp + ph + k * .6) * 90 + Math.sin(x / 90 - t * sp * 1.7 + ph) * 26 + k * 34; x === -40 ? g.moveTo(x, y) : g.lineTo(x, y); }
+      g.strokeStyle = rgb(c, .10 * a); g.lineWidth = 70 - k * 18; g.filter = 'blur(18px)'; g.stroke();
+    }
+  });
+  g.restore(); g.filter = 'none';
+}
+// Hook: Warp-Flug durch Lichtstreifen, endet mit Zoom-Punch
+const WARP = (() => { const r = rng(5); return Array.from({ length: 220 }, () => ({ a: r() * 6.283, r0: 20 + r() * 260, sp: .7 + r() * 1.3, c: SPEC[(r() * 7) | 0], w: 2 + r() * 5 })); })();
+function hook(t) {
+  const k = 1 - p(t, .35, .75); if (k <= 0) return;
+  g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+  WARP.forEach(s => {
+    const z = Math.pow(t * s.sp * 2.4, 2.2), r1 = s.r0 + z * 900, r2 = r1 + 60 + z * 700;
+    g.strokeStyle = rgb(s.c, .85 * k); g.lineWidth = s.w * (1 + z);
+    g.beginPath(); g.moveTo(W / 2 + Math.cos(s.a) * r1, 900 + Math.sin(s.a) * r1); g.lineTo(W / 2 + Math.cos(s.a) * r2, 900 + Math.sin(s.a) * r2); g.stroke();
+  });
+  glow(W / 2, 900, 700 * (1 - k * .5), [255, 255, 255], .9 * k * k);
+  g.restore();
+}
+
+function sceneB(t) {
+  const u = t - T.b;
+  const bgB = g.createLinearGradient(0, 0, W, H); bgB.addColorStop(0, '#2a0c4e'); bgB.addColorStop(.5, '#0e1a4f'); bgB.addColorStop(1, '#0a3a4a');
+  g.fillStyle = bgB; g.fillRect(0, 0, W, H);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(150, 1500, 700, [255, 40, 160], .28); glow(1000, 200, 600, [0, 200, 255], .18); g.restore();
+  const push = 1 + u * .012; g.save(); g.translate(W / 2, H / 2); g.scale(push, push); g.translate(-W / 2, -H / 2);
+  // Sonne
+  const ks = eo(p(u, 0, .6)), sx = 830, sy = 600;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  glow(sx, sy, 420 * ks, [255, 220, 150], .55);
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + u * .25; beam(sx + Math.cos(a) * 110, sy + Math.sin(a) * 110, sx + Math.cos(a) * (170 + 30 * Math.sin(u * 3 + i)), sy + Math.sin(a) * (170 + 30 * Math.sin(u * 3 + i)), 3, [255, 230, 180], .5 * ks); }
+  g.restore();
+  g.fillStyle = `rgba(255,248,230,${ks})`; g.beginPath(); g.arc(sx, sy, 95 * ks, 0, 7); g.fill();
+  // Prisma
+  const kp = eback(p(u, .25, .8)), px = 430, py = 1010, ps = 230 * kp;
+  // weißer Strahl Sonne -> Prisma
+  const kw = eo(p(u, .45, 1.15)), ex = 350, ey = 990;
+  if (kw > 0) beam(sx - 60, sy + 60, lerp(sx - 60, ex, kw), lerp(sy + 60, ey, kw), 10, [255, 250, 235]);
+  // Regenbogen-Fächer
+  const kf = eo(p(u, 1.7, 2.8));
+  if (kf > 0) SPEC.forEach((c, i) => {
+    const tx = 1180, ty = 1010 + i * 52, lam = 30 + (LAMBDA[i] - 400) * .16;
+    wave(500, 1050, lerp(500, tx, 1), ty, lam, 9, u * 9, c, 5, kf);
+  });
+  if (kp > 0) {
+    g.save(); g.translate(px, py); g.beginPath(); g.moveTo(0, -ps); g.lineTo(ps * .9, ps * .6); g.lineTo(-ps * .9, ps * .6); g.closePath();
+    const gl = g.createLinearGradient(-ps, -ps, ps, ps); gl.addColorStop(0, 'rgba(255,255,255,.16)'); gl.addColorStop(1, 'rgba(160,190,255,.05)');
+    g.fillStyle = gl; g.fill(); g.lineWidth = 4; g.strokeStyle = 'rgba(255,255,255,.75)'; g.shadowColor = 'rgba(255,255,255,.6)'; g.shadowBlur = 24; g.stroke(); g.restore();
+  }
+  // Labels
+  const kl = eo(p(u, 2.9, 3.3));
+  if (kl > 0) { text('700 nm', 900, 985, 34, 'IDS', '#ff6b5f', { alpha: kl, align: 'left' }); text('410 nm', 900, 1370, 34, 'IDS', '#a98bff', { alpha: kl, align: 'left' }); }
+  g.restore();
+  // Headline
+  const k1 = p(u, .15, .55), k2 = p(u, 2.1, 2.5);
+  text('WEISSES LICHT', W / 2, 200, 96, 'IDB', '#ffffff', { alpha: clamp(k1 * 3) * (1 - k2 * .25), sc: lerp(1.25, 1, eback(k1)), mblur: (1 - eo(k1)) * 10, ls: -2 });
+  if (k2 > 0) {
+    g.save(); g.font = '118px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-3px';
+    const gr = g.createLinearGradient(160, 0, 920, 0); SPEC.forEach((c, i) => gr.addColorStop(i / 6, rgb(c)));
+    g.globalAlpha = clamp(k2 * 3); g.translate(W / 2, 330); const s = lerp(1.3, 1, eback(k2)); g.scale(s, s);
+    g.fillStyle = gr; g.shadowColor = 'rgba(255,255,255,.3)'; g.shadowBlur = 30; g.fillText('= ALLE FARBEN', 0, 0); g.restore();
+  }
+}
+
+function sceneC(t) {
+  const u = t - T.c;
+  const bg = g.createRadialGradient(W / 2, 900, 100, W / 2, 900, 1300); bg.addColorStop(0, '#173a9e'); bg.addColorStop(.6, '#2a0f63'); bg.addColorStop(1, '#12052e');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  aurora(u + 3, .7);
+  const dolly = 1 + eio(p(u, 0, 5.0)) * .35, cx = W / 2, cy = 960;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  MOL.forEach(m => {
+    const k = 1 + (dolly - 1) * m.z * 1.6;
+    const x = cx + (m.x + Math.sin(u * .8 + m.ph) * 14) * k, y = cy + (m.y + Math.cos(u * .7 + m.ph) * 14) * k;
+    if (x < -40 || x > W + 40 || y < -40 || y > H + 40) return;
+    const r = (3 + m.z * 9) * k, a = (.15 + m.z * .55) * eo(p(u, m.z * .3, m.z * .3 + .5));
+    const mc = [[120, 200, 255], [255, 120, 220], [120, 255, 220], [190, 150, 255]][(m.ph * 10 | 0) % 4];
+    glow(x, y, r * 3, mc, a * .7);
+    g.fillStyle = rgb(mix(mc, [255, 255, 255], .5), a); g.beginPath(); g.arc(x, y, r * .45, 0, 7); g.fill();
+  });
+  // Lichtstrahl quer durchs Bild
+  const kb = eo(p(u, 0, .9));
+  beam(-50, 1020, lerp(-50, W + 50, kb), 1020 - kb * 120, 9, [255, 248, 230], .9);
+  g.restore();
+  // Hero-Moleküle
+  [['N₂', 330, 740, .7, [120, 170, 255]], ['O₂', 760, 1250, 1.0, [120, 220, 255]]].forEach(([lab, x, y, st, c]) => {
+    const k = p(u, st, st + .5); if (k <= 0) return; const s = eback(k);
+    g.save(); g.translate(x, y); g.scale(s, s); g.globalCompositeOperation = 'lighter'; glow(0, 0, 220, c, .35); g.restore();
+    g.save(); g.translate(x, y); g.scale(s, s); g.rotate(u * .4);
+    [[-38, 0], [38, 0]].forEach(([ox, oy]) => { const gr = g.createRadialGradient(ox - 14, oy - 16, 4, ox, oy, 56); gr.addColorStop(0, '#ffffff'); gr.addColorStop(.35, rgb(c)); gr.addColorStop(1, rgb(mix(c, [10, 20, 60], .7))); g.fillStyle = gr; g.beginPath(); g.arc(ox, oy, 56, 0, 7); g.fill(); });
+    g.restore();
+    text(lab, x, y + 120 * s, 54, 'IDX', '#ffffff', { alpha: clamp(k * 2) });
+  });
+  // Zahl
+  const kn = p(u, 1.9, 2.4), kd = p(u, 2.6, 3.0);
+  text('MILLIARDEN', W / 2, 230, 124, 'IDB', '#ffffff', { alpha: clamp(kn * 3), sc: lerp(1.35, 1, eback(kn)), mblur: (1 - eo(kn)) * 12, ls: -3 });
+  if (kd > 0) {
+    text('≈ 2,5 · 10²⁵ Teilchen pro m³', W / 2, 345, 46, 'IDS', '#9cc3ff', { alpha: eo(kd) });
+  }
+}
+
+function sceneD(t) {
+  const u = t - T.d;
+  const bgD = g.createLinearGradient(0, 0, 0, H); bgD.addColorStop(0, '#0a1a6b'); bgD.addColorStop(.52, '#140a3a'); bgD.addColorStop(1, '#4a0a22');
+  g.fillStyle = bgD; g.fillRect(0, 0, W, H);
+  const B = [70, 150, 255], Rr = [255, 80, 60];
+  // Blau-Bahn
+  const my = 820, mx = 560;
+  const kw = eo(p(u, 0, 1.2));
+  wave(-40, my, lerp(-40, mx - 70, kw), my, 34, 26, u * 14, B, 6, 1);
+  text('450 nm', 60, my - 90, 38, 'IDS', '#8cc0ff', { alpha: eo(p(u, .3, .7)), align: 'left' });
+  // Streu-Explosion
+  const kh = u - 1.2;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  if (kh > 0) {
+    for (let wv = 0; wv < 4; wv++) {
+      const age = (kh - wv * .45); if (age < 0) continue; const k = (age % 1.8) / 1.8;
+      for (let i = 0; i < 26; i++) {
+        const a = i / 26 * Math.PI * 2 + wv * .3, r0 = 60 + k * 300, r1 = r0 + 90;
+        beam(mx + Math.cos(a) * r0, my + Math.sin(a) * r0, mx + Math.cos(a) * r1, my + Math.sin(a) * r1, 4, B, (1 - k) * .9);
+      }
+    }
+    glow(mx, my, 300, B, .35 + .15 * Math.sin(u * 8));
+  }
+  g.restore();
+  molecule(mx, my, 1, [140, 200, 255], u);
+  // Rot-Bahn
+  const ry = 1240, kr = eo(p(u, 2.2, 3.4));
+  if (kr > 0) {
+    wave(-40, ry, lerp(-40, W + 40, kr), ry, 120, 30, u * 7, Rr, 6, 1);
+    text('700 nm', 60, ry - 100, 38, 'IDS', '#ff8f80', { alpha: eo(p(u, 2.3, 2.7)), align: 'left' });
+    if (u > 2.9) { g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 4; i++) { const a = -Math.PI / 2 + (i - 1.5) * .9, k = ((u - 2.9 + i * .3) % 1.6) / 1.6; beam(mx + Math.cos(a) * (60 + k * 200), ry + Math.sin(a) * (60 + k * 200), mx + Math.cos(a) * (120 + k * 200), ry + Math.sin(a) * (120 + k * 200), 3, Rr, (1 - k) * .5); } g.restore(); }
+  }
+  if (kr > 0) molecule(mx, ry, eback(p(u, 2.2, 2.7)), [255, 160, 140], u);
+  // Zähler
+  const kc = p(u, 2.6, 3.7);
+  if (kc > 0) {
+    const v = lerp(1, 5.9, eo(kc));
+    text(v.toFixed(1).replace('.', ',') + '×', W / 2, 260, 230, 'IDB', '#ffffff', { glow: 'rgba(80,150,255,.8)', blur: 60, sc: lerp(1.3, 1, eback(p(u, 2.6, 3.0))), ls: -6 });
+    text('STÄRKER GESTREUT', W / 2, 410, 54, 'IDX', '#8cc0ff', { alpha: eo(p(u, 2.9, 3.3)), ls: 4 });
+    text('(700 nm ÷ 450 nm)⁴ ≈ 5,9', W / 2, 480, 34, 'IDM', 'rgba(255,255,255,.55)', { alpha: eo(p(u, 3.3, 3.7)) });
+  }
+  text('Blau prallt ab', 920, my + 170, 36, 'IDS', '#8cc0ff', { alpha: eo(p(u, 1.5, 1.9)), align: 'right' });
+  text('Rot fliegt weiter', 1020, ry + 120, 36, 'IDS', '#ff8f80', { alpha: eo(p(u, 3.3, 3.7)), align: 'right' });
+}
+function molecule(x, y, s, c, u) {
+  g.save(); g.translate(x, y); g.scale(s, s); g.rotate(u * .6);
+  [[-24, 0], [24, 0]].forEach(([ox]) => { const gr = g.createRadialGradient(ox - 9, -10, 3, ox, 0, 36); gr.addColorStop(0, '#ffffff'); gr.addColorStop(.4, rgb(c)); gr.addColorStop(1, rgb(mix(c, [10, 20, 50], .7))); g.fillStyle = gr; g.beginPath(); g.arc(ox, 0, 36, 0, 7); g.fill(); });
+  g.restore();
+}
+
+function sceneE(t) {
+  const u = t - T.e;
+  const kb = eio(p(u, .2, 4.2));
+  const top = mix([6, 9, 20], [22, 70, 190], kb), hor = mix([10, 14, 30], [120, 185, 255], kb);
+  const sky = g.createLinearGradient(0, 0, 0, 1400); sky.addColorStop(0, rgb(top)); sky.addColorStop(1, rgb(hor));
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(170, 300, 380, [255, 240, 210], .7); g.restore();
+  g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(170, 300, 70, 0, 7); g.fill();
+  // Photonen von überall zum Auge
+  const ex = 540, ey = 1300;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  PHOT.forEach(ph => {
+    const lt = (u - .3 - ph.t0 * .8); if (lt < 0) return; const k = (lt * ph.sp) % 1.2; if (k > 1) return;
+    const sx = ex + Math.cos(ph.a) * ph.d, sy = ey + Math.sin(ph.a) * ph.d;
+    const hx = lerp(sx, ex, eio(k)), hy = lerp(sy, ey, eio(k)), tx = lerp(sx, ex, eio(clamp(k - .12))), ty = lerp(sy, ey, eio(clamp(k - .12)));
+    beam(tx, ty, hx, hy, 4, [110, 180, 255], .9 * (1 - k * .5));
+  });
+  glow(ex, ey - 40, 160, [110, 180, 255], .4);
+  g.restore();
+  // Boden & Person
+  g.fillStyle = '#05070c'; g.beginPath(); g.moveTo(0, 1390); g.quadraticCurveTo(W / 2, 1330, W, 1390); g.lineTo(W, H); g.lineTo(0, H); g.fill();
+  g.fillStyle = '#05070c'; g.beginPath(); g.arc(ex, 1268, 26, 0, 7); g.fill(); g.beginPath(); g.roundRect(ex - 26, 1296, 52, 70, 18); g.fill();
+  const kt = p(u, 3.0, 3.4);
+  text('BLAU', W / 2, 560, 250, 'IDB', '#ffffff', { alpha: clamp(p(u, .4, .8) * 3) * .95, sc: lerp(1.3, 1, eback(p(u, .4, .9))), ls: -8, glow: 'rgba(120,190,255,.7)', blur: 50 });
+  text('AUS JEDER RICHTUNG', W / 2, 720, 64, 'IDX', '#e6f1ff', { alpha: eo(kt), sc: lerp(1.2, 1, eback(kt)), ls: 3 });
+}
+
+function sceneF(t) {
+  const u = t - T.f;
+  const kS = eio(p(u, 1.0, 4.4));               // Sonne wandert Richtung Horizont
+  const top = mix([12, 30, 90], [40, 18, 70], kS), hor = mix([90, 150, 240], [255, 110, 50], kS);
+  const sky = g.createLinearGradient(0, 0, 0, 1500); sky.addColorStop(0, rgb(top)); sky.addColorStop(1, rgb(hor));
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  // Planet & Atmosphäre
+  const PX = W / 2, PY = 3000, PR = 1580, AR = 1760;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  const ag = g.createRadialGradient(PX, PY, PR, PX, PY, AR); ag.addColorStop(0, rgb(mix([80, 150, 255], [255, 140, 70], kS), .55)); ag.addColorStop(1, 'rgba(80,150,255,0)');
+  g.fillStyle = ag; g.beginPath(); g.arc(PX, PY, AR, 0, 7); g.fill(); g.restore();
+  g.fillStyle = '#05070d'; g.beginPath(); g.arc(PX, PY, PR, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 2; g.beginPath(); g.arc(PX, PY, AR, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+  // Beobachter
+  const ox = PX, oy = PY - PR;
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(ox, oy - 6, 9, 0, 7); g.fill();
+  // Sonnenstrahl: Winkel von senkrecht bis fast waagerecht
+  const th = lerp(0, 1.43, kS), dx = -Math.sin(th), dy = -Math.cos(th);
+  // Austrittspunkt am Atmosphärenrand (Kreis-Schnitt)
+  const fx = ox - PX, fy = oy - PY, bq = fx * dx + fy * dy, cq = fx * fx + fy * fy - AR * AR, s = -bq + Math.sqrt(bq * bq - cq);
+  const ix = ox + dx * s, iy = oy + dy * s;
+  const kR = eo(p(u, 1.1, 1.7));
+  if (kR > 0) {
+    beam(ix + dx * 1600, iy + dy * 1600, ix, iy, 9, [255, 250, 235], kR);
+    // Strahl in der Luft: Blau geht verloren, Farbe kippt Richtung Rot
+    const N = 40;
+    for (let i = 0; i < N; i++) {
+      const a = i / N, b = (i + 1) / N; const lost = kS * a;
+      const col = mix([255, 250, 235], [255, 70, 30], clamp(lost * 1.2));
+      beam(lerp(ix, ox, a), lerp(iy, oy, a), lerp(ix, ox, b), lerp(iy, oy, b), 9, col, kR);
+    }
+    // abgestreute blaue Teilchen
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const RB = rng(99);
+    for (let i = 0; i < 90 * kS; i++) {
+      const a = RB(), t0 = RB() * 3, life = ((u - 1.2 - t0) % 1.5 + 1.5) % 1.5 / 1.5, side = RB() < .5 ? -1 : 1;
+      const bx = lerp(ix, ox, a), by = lerp(iy, oy, a);
+      const nx = -dy * side, ny = dx * side, d = life * (120 + RB() * 160);
+      g.fillStyle = `rgba(100,170,255,${(1 - life) * .9})`; g.beginPath(); g.arc(bx + nx * d, by + ny * d, 5 + RB() * 4, 0, 7); g.fill();
+    }
+    g.restore();
+  }
+  // Sonne
+  const sunx = ox + dx * 1250, suny = oy + dy * 1250, sa = eo(p(u, 1.0, 1.5));
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(sunx, suny, 340, mix([255, 240, 200], [255, 120, 50], kS), .8 * sa); g.restore();
+  g.fillStyle = rgb(mix([255, 250, 235], [255, 150, 90], kS), sa); g.beginPath(); g.arc(sunx, suny, 66, 0, 7); g.fill();
+  // Texte
+  const kq = p(u, .2, .6);
+  text('UND ABENDS?', W / 2, 250, 132, 'IDB', '#ffffff', { alpha: clamp(kq * 3) * (1 - eo(p(u, 1.0, 1.4))), sc: lerp(1.4, 1, eback(kq)), mblur: (1 - eo(kq)) * 12, ls: -3 });
+  const km = p(u, 1.3, 1.7);
+  if (km > 0 && u < T.end - T.f) {
+    const am = Math.min(38, 1 / Math.max(Math.cos(th), .026));
+    text('WEG DURCH DIE LUFT', W / 2, 205, 50, 'IDX', 'rgba(255,255,255,.75)', { alpha: eo(km), ls: 4 });
+    text(Math.round(am) + '× länger', W / 2, 320, 150, 'IDB', '#ffffff', { alpha: eo(km), glow: 'rgba(255,120,60,.7)', blur: 50, ls: -4 });
+  }
+  // Schlusskarte
+  const ke = p(u, T.end - T.f, T.end - T.f + .5);
+  if (ke > 0) {
+    g.fillStyle = `rgba(3,4,10,${eo(ke) * .82})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '150px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-4px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#5aa8ff'); gr.addColorStop(1, '#ff5a3d');
+    g.fillStyle = gr; g.globalAlpha = eo(ke);
+    g.translate(W / 2, 820); const sc = lerp(1.2, 1, eback(ke)); g.scale(sc, sc);
+    g.fillText('RAYLEIGH-', 0, -80); g.fillText('STREUUNG', 0, 80); g.restore();
+    text('Darum ist der Himmel blau.', W / 2, 1060, 52, 'IDS', '#ffffff', { alpha: eo(p(u, T.end - T.f + .4, T.end - T.f + .9)) });
+  }
+}
+
+// ---------- Übergänge, Korn, Vignette ----------
+function transition(t) {
+  [T.b, T.c, T.d, T.e, T.f].forEach(tb => {
+    const d = t - tb; if (Math.abs(d) > .32) return;
+    const k = 1 - Math.abs(d) / .32;
+    g.save(); g.globalCompositeOperation = 'lighter';
+    g.fillStyle = `rgba(255,255,255,${k * k * .32})`; g.fillRect(0, 0, W, H);
+    const bx = lerp(-600, W + 600, (d + .32) / .64);
+    const gr = g.createLinearGradient(bx - 180, 0, bx + 180, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, `rgba(255,250,235,${k * .3})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.translate(W / 2, H / 2); g.rotate(-.35); g.translate(-W / 2, -H / 2); g.fillStyle = gr; g.fillRect(-600, -400, W + 1200, H + 800);
+    g.restore();
+  });
+}
+const OFF = [0, 1].map(() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; });
+function rgbSplit(px) {
+  if (px < .5) return;
+  const [a, b] = OFF, ga = a.getContext('2d'), gb = b.getContext('2d');
+  [[ga, '#ff0000'], [gb, '#00ffff']].forEach(([x, col]) => { x.globalCompositeOperation = 'source-over'; x.clearRect(0, 0, W, H); x.drawImage(cv, 0, 0); x.globalCompositeOperation = 'multiply'; x.fillStyle = col; x.fillRect(0, 0, W, H); });
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  g.drawImage(a, -px, 0); g.globalCompositeOperation = 'lighter'; g.drawImage(b, px, px * .3); g.restore();
+}
+function grade() {
+  const [a] = OFF, ga = a.getContext('2d'); ga.globalCompositeOperation = 'source-over'; ga.drawImage(cv, 0, 0);
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'saturate(1.3) contrast(1.06)'; g.drawImage(a, 0, 0); g.restore(); g.filter = 'none';
+}
+function finish(t, frame) {
+  const v = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)');
+  g.fillStyle = v; g.fillRect(0, 0, W, H);
+  g.save(); g.globalAlpha = .06; g.globalCompositeOperation = 'overlay'; g.drawImage(NOISE[frame % 3], 0, 0, W, H); g.restore();
+  const f = Math.min(1, t / .35, (DUR - t) / .5); if (f < 1) { g.fillStyle = `rgba(0,0,0,${1 - Math.max(0, f)})`; g.fillRect(0, 0, W, H); }
+}
+
+window.renderFrame = (t, frame) => {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none';
+  // leichter Kamera-Ruck bei Szenenwechseln
+  const sh = [T.b, T.c, T.d, T.e, T.f].reduce((m, tb) => { const d = t - tb; return d > 0 && d < .25 ? (1 - d / .25) * 10 : m; }, 0);
+  g.save(); g.translate(Math.sin(t * 90) * sh, Math.cos(t * 70) * sh);
+  if (t < T.b) sceneA(t); else if (t < T.c) sceneB(t); else if (t < T.d) sceneC(t); else if (t < T.e) sceneD(t); else if (t < T.f) sceneE(t); else sceneF(t);
+  g.restore();
+  transition(t);
+  grade();
+  const split = 22 * (1 - p(t, .3, 1.1)) * (t < 1.1 ? 1 : 0) + 16 * Math.max(0, 1 - Math.abs(t - 1.92) / .22) + [T.b, T.c, T.d, T.e, T.f].reduce((m, tb) => Math.max(m, 9 * Math.max(0, 1 - Math.abs(t - tb) / .2)), 0);
+  rgbSplit(split);
+  if (t < T.end) captions(t);
+  finish(t, frame);
+};
+window.ready = document.fonts.ready.then(() => Promise.all(['IDB', 'IDX', 'IDS', 'IDM'].map(f => document.fonts.load(`40px ${f}`))));
+</script>
+</body></html>

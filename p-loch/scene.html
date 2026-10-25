@@ -1,0 +1,212 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;   // Zeitpunkt innerhalb von Satz i
+const END = S_[6][1] + .2;
+window.CFG = {
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(Schwarzes|Loch|nichts|brutal|Füße|Kopf|Spaghetti|Spaghettifizierung|Verrückteste|langsamer|verblasst|Uhr|normal)/,
+  split: t => 24 * (1 - p(t, 0, .7)) + 30 * Math.max(0, 1 - Math.abs(t - S_[4][0]) / .35) + 14 * Math.max(0, 1 - Math.abs(t - at(0, .62)) / .2) + 12 * Math.max(0, 1 - Math.abs(t - at(2, .25)) / .2),
+  shake: t => (t > S_[2][0] && t < S_[3][0] ? 4 + 8 * Math.max(0, 1 - Math.abs(t - at(2, .25)) / .3) : 0) + (t > S_[4][0] && t < S_[4][0] + .6 ? 18 * (1 - (t - S_[4][0]) / .6) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script>
+// ---------- Schwarzes Loch mit Akkretionsscheibe ----------
+const DISK = (() => { const r = rng(9); return Array.from({ length: 1100 }, () => ({ rr: 1.35 + Math.pow(r(), 1.6) * 2.1, a: r() * 6.283, s: 1 + r() * 2.5 })); })();
+const diskCol = rr => rr < 1.7 ? [255, 245, 220] : rr < 2.2 ? [255, 170, 80] : rr < 2.8 ? [255, 80, 160] : [150, 80, 255];
+function blackhole(x, y, R, t, o = {}) {
+  const tilt = o.tilt ?? .28, spin = o.spin ?? 1;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  glow(x, y, R * 4.2, [140, 60, 255], .35); glow(x, y, R * 2.2, [255, 120, 60], .25);
+  // durchgehende Scheibe als leuchtende, kreisende Bänder
+  const band = front => { g.save(); g.lineCap = 'round';
+    for (let rr = 1.4; rr <= 3.4; rr += .14) {
+      g.strokeStyle = rgb(diskCol(rr), .2 * (1.25 - (rr - 1.4) / 2.6)); g.lineWidth = R * .16;
+      g.setLineDash([R * .5, R * .22]); g.lineDashOffset = -t * spin * R * 3 / Math.pow(rr, 1.5);
+      g.beginPath(); g.ellipse(x, y, rr * R, rr * R * tilt, 0, front ? 0 : Math.PI, front ? Math.PI : 2 * Math.PI); g.stroke();
+    }
+    g.setLineDash([]); g.restore(); };
+  const part = front => DISK.forEach(d => {
+    const a = d.a + t * spin * 1.6 / Math.pow(d.rr, 1.5), sa = Math.sin(a);
+    if ((sa > 0) !== front) return;
+    const px = x + Math.cos(a) * d.rr * R, py = y + sa * d.rr * R * tilt, beam = 1 + .7 * Math.cos(a + 1.57);
+    const sz = d.s * R / 110; g.fillStyle = rgb(diskCol(d.rr), Math.min(1, .55 * beam)); g.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+  });
+  band(false); part(false);
+  // Licht der Rückseite, nach oben gebogen (Lichtablenkung)
+  g.lineWidth = R * .16; g.strokeStyle = 'rgba(255,170,90,.35)'; g.beginPath(); g.ellipse(x, y, R * 1.35, R * 1.25, 0, Math.PI, 2 * Math.PI); g.stroke();
+  g.lineWidth = R * .05; g.strokeStyle = 'rgba(255,240,210,.8)'; g.beginPath(); g.arc(x, y, R * 1.05, 0, 7); g.stroke();
+  g.restore();
+  g.fillStyle = '#000'; g.beginPath(); g.arc(x, y, R, 0, 7); g.fill();
+  g.save(); g.globalCompositeOperation = 'lighter'; band(true); part(true); g.restore();
+}
+// Sternenhimmel mit Lichtablenkung um das Loch
+function lensedStars(x, y, R, t, a = 1) {
+  STARS.forEach(s => {
+    let dx = s.x - x, dy = s.y - y; const d = Math.hypot(dx, dy) || 1, nd = d + R * R * 1.4 / d, k = nd / d;
+    const px = x + dx * k, py = y + dy * k; if (Math.hypot(px - x, py - y) < R * 1.1) return;
+    const al = (.4 + .6 * (.5 + .5 * Math.sin(t * s.sp * 2 + s.ph))) * a; g.fillStyle = `rgba(230,225,255,${al})`; g.fillRect(px, py, s.s * Math.min(3, k), s.s);
+  });
+}
+// Astronaut (Vektor), sy = Dehnung längs, sx = Stauchung quer
+function astronaut(x, y, s, rot, o = {}) {
+  const sx = o.sx ?? 1, sy = o.sy ?? 1, tint = o.tint ?? null, a = o.a ?? 1;
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(s * sx, s * sy); g.globalAlpha = a;
+  const suit = tint ? rgb(mix([240, 240, 250], tint, .6)) : '#f0f0f8', shade = tint ? rgb(mix([190, 190, 210], tint, .6)) : '#bfc0d4';
+  g.fillStyle = shade; g.beginPath(); g.roundRect(-46, -20, 26, 60, 12); g.fill();              // Rucksack
+  g.fillStyle = suit;
+  g.beginPath(); g.roundRect(-30, -30, 60, 70, 22); g.fill();                                  // Rumpf
+  g.beginPath(); g.roundRect(-30, 30, 24, 60, 12); g.fill(); g.beginPath(); g.roundRect(6, 30, 24, 60, 12); g.fill();   // Beine
+  g.beginPath(); g.roundRect(-52, -18, 22, 52, 11); g.fill(); g.beginPath(); g.roundRect(30, -18, 22, 52, 11); g.fill(); // Arme
+  g.beginPath(); g.arc(0, -64, 40, 0, 7); g.fill();                                            // Helm
+  const vg = g.createLinearGradient(-26, -84, 26, -44); vg.addColorStop(0, '#ffd27a'); vg.addColorStop(1, '#b8601e');
+  g.fillStyle = vg; g.beginPath(); g.ellipse(4, -62, 28, 22, 0, 0, 7); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.ellipse(-6, -70, 10, 5, -.5, 0, 7); g.fill();
+  g.fillStyle = '#ff5ac8'; g.fillRect(-14, -10, 28, 10);
+  g.restore();
+}
+function clock(x, y, r, ang, col = '#ffffff', a = 1) {
+  g.save(); g.globalAlpha = a; g.strokeStyle = col; g.lineWidth = r * .1; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
+  for (let i = 0; i < 12; i++) { const q = i / 12 * 6.283; g.lineWidth = r * .05; g.beginPath(); g.moveTo(x + Math.sin(q) * r * .78, y - Math.cos(q) * r * .78); g.lineTo(x + Math.sin(q) * r * .9, y - Math.cos(q) * r * .9); g.stroke(); }
+  g.lineWidth = r * .08; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.sin(ang) * r * .72, y - Math.cos(ang) * r * .72); g.stroke();
+  g.fillStyle = col; g.beginPath(); g.arc(x, y, r * .08, 0, 7); g.fill(); g.restore();
+}
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, 540, y, size, 'IDB', col, { alpha: clamp(k * 3), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || '#1a0638' }); }
+
+// ---------- Szenen ----------
+function sA(t) {   // Hook: Spiralflug in die Scheibe
+  bg([[0, '#2a0660'], [.5, '#14063a'], [1, '#05020f']]);
+  g.save(); cam(1 + t * .18 + (punch(t, at(0, .62), .14) - 1), t * .35);
+  lensedStars(540, 900, 180 + t * 30, t);
+  // Streifen, die ins Loch gezogen werden
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 90; i++) { const a = i * 2.39996, ph = ((t * .9 + i * .037) % 1), r1 = lerp(1100, 120, eio(ph)), r2 = r1 + 120 * (1 - ph); g.strokeStyle = rgb(SPEC[i % 7], .5 * ph); g.lineWidth = 4; g.beginPath(); g.moveTo(540 + Math.cos(a + ph * 2) * r1, 900 + Math.sin(a + ph * 2) * r1); g.lineTo(540 + Math.cos(a + ph * 2) * r2, 900 + Math.sin(a + ph * 2) * r2); g.stroke(); }
+  g.restore();
+  blackhole(540, 900, lerp(110, 230, eo(p(t, 0, S_[1][0]))), t, { tilt: .3 });
+  g.restore();
+  big('DU FÄLLST', 300, 128, '#ffffff', p(t, .45, .85));
+  big('IN EIN SCHWARZES LOCH', 420, 62, '#ff9ae0', p(t, at(0, .3), at(0, .3) + .35), { ls: 0 });
+  big('WAS PASSIERT?', 1340, 124, '#ffd23f', p(t, at(0, .62), at(0, .62) + .35), { glow: 'rgba(255,200,60,.6)', ls: -4 });
+}
+function sB(t) {   // Erst mal: nichts – ruhiges Schweben
+  const u = t - S_[1][0];
+  bg([[0, '#1c0850'], [.6, '#0c0a3a'], [1, '#04020e']]);
+  g.save(); cam(1.04 + u * .03, Math.sin(u * .5) * .04);
+  lensedStars(540, 680, 200, t); blackhole(540, 680, 200, t, { tilt: .26 });
+  astronaut(540 + Math.sin(u * 1.4) * 30, 1250 - u * 40, 1.4, Math.sin(u * 1.1) * .25);
+  g.restore();
+  big('ERST MAL:', 230, 96, '#ffffff', p(t, at(1, 0), at(1, 0) + .3));
+  big('NICHTS.', 360, 150, '#7af0ff', p(t, at(1, .3), at(1, .3) + .35), { glow: 'rgba(120,240,255,.5)' });
+  // kleine "Zzz"-artige Schwebe-Partikel
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 12; i++) { const k = ((u * .5 + i / 12) % 1); glow(540 + Math.sin(i * 3 + u) * 160, 1400 - k * 400, 14, [150, 220, 255], .5 * (1 - k)); } g.restore();
+}
+function sC(t) {   // brutal – Kräfte
+  const u = t - S_[2][0], flash = Math.max(0, 1 - Math.abs(t - at(2, .25)) / .25);
+  bg([[0, '#3a0630'], [.55, '#1a0638'], [1, '#05020f']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(540, 2100, 1300, [255, 120, 60], .6); g.restore();
+  g.save(); cam(1.05 + u * .05 + (punch(t, at(2, .25), .15) - 1), Math.sin(u * 2) * .02);
+  blackhole(540, 2050, 420, t, { tilt: .22 });
+  const ay = 860, kf = eo(p(t, at(2, .45), at(2, .75)));
+  astronaut(540, ay, 2.4, Math.sin(u * 3) * .05, { sy: 1 + kf * .15 });
+  if (kf > 0) {
+    arrow(700, ay + 150, 700, ay + 150 + 260 * kf, [255, 70, 90], 22, kf);
+    arrow(380, ay - 230, 380, ay - 230 + 110 * kf, [255, 170, 190], 12, kf);
+    text('FÜSSE', 760, ay + 230, 52, 'IDB', '#ff4a5e', { align: 'left', alpha: kf });
+    text('KOPF', 330, ay - 200, 44, 'IDB', '#ffb0c0', { align: 'right', alpha: kf });
+  }
+  g.restore();
+  if (flash > 0) { g.fillStyle = `rgba(255,40,70,${flash * .35})`; g.fillRect(0, 0, W, H); }
+  big('BRUTAL!', 260, 190, '#ff4a5e', p(t, at(2, .22), at(2, .22) + .3), { glow: 'rgba(255,60,90,.7)', ls: -6 });
+}
+function sD(t) {   // Spaghettifizierung
+  const u = t - S_[3][0], k = eio(p(t, at(3, .05), at(3, .7)));
+  bg([[0, '#2a0660'], [.5, '#3a0a4a'], [1, '#07020f']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(540, 2000, 1200, [255, 140, 60], .55); g.restore();
+  g.save(); cam(1.08 + u * .06, -u * .05);
+  blackhole(540, 2000, 400, t, { tilt: .22 });
+  // Nudel-Spuren
+  g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+  for (let i = 0; i < 7; i++) { g.strokeStyle = rgb(mix([255, 210, 90], [255, 120, 200], i / 7), .35 * k); g.lineWidth = 10; g.beginPath(); for (let y = 500; y < 1900; y += 20) { const x = 540 + (i - 3) * 26 + Math.sin(y / 60 + u * 5 + i) * 18 * k; y === 500 ? g.moveTo(x, y) : g.lineTo(x, y); } g.stroke(); }
+  g.restore();
+  astronaut(540 + Math.sin(u * 6) * 8 * k, 900 + k * 260, 2.0, Math.sin(u * 4) * .04, { sy: 1 + k * 3.4, sx: 1 - k * .62 });
+  g.restore();
+  const kt = p(t, at(3, .6), at(3, .6) + .4);
+  if (kt > 0) {
+    g.save(); g.translate(540, 280); g.scale(1, lerp(2.4, 1, eback(kt))); text('SPAGHETTI-', 0, -50, 118, 'IDB', '#ffd23f', { alpha: clamp(kt * 3), glow: 'rgba(255,200,60,.6)', blur: 40, ls: -3, stroke: 10, strokeColor: '#1a0638' }); g.restore();
+    g.save(); g.translate(540, 400); g.scale(1, lerp(2.4, 1, eback(p(kt, .25, 1)))); text('FIZIERUNG', 0, 0, 118, 'IDB', '#ffd23f', { alpha: clamp(p(kt, .25, 1) * 3), glow: 'rgba(255,200,60,.6)', blur: 40, ls: -3, stroke: 10, strokeColor: '#1a0638' }); g.restore();
+  }
+  big('LANG GEZOGEN', 1330, 70, '#ffffff', p(t, at(3, .05), at(3, .05) + .3), { ls: 2 });
+}
+function sE(t) {   // Re-Hook: das Verrückteste
+  const u = t - S_[4][0];
+  bg([[0, '#ff2a7a'], [.45, '#7a1aff'], [1, '#0a0638']]);
+  g.save(); cam(1.15 - u * .06, u * .4);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 + u * .8; g.fillStyle = `rgba(255,255,255,${i % 2 ? .07 : .12})`; g.beginPath(); g.moveTo(540, 960); g.lineTo(540 + Math.cos(a) * 1600, 960 + Math.sin(a) * 1600); g.lineTo(540 + Math.cos(a + .13) * 1600, 960 + Math.sin(a + .13) * 1600); g.fill(); } g.restore();
+  blackhole(540, 860, 170, t * 3, { tilt: .35 });
+  g.restore();
+  const k = p(t, S_[4][0] + .05, S_[4][0] + .4);
+  if (k > 0) {
+    g.save(); g.font = '150px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-5px';
+    const gr = g.createLinearGradient(100, 0, 980, 0); SPEC.forEach((c, i) => gr.addColorStop(i / 6, rgb(c)));
+    g.translate(540, 1300); const s = lerp(2.4, 1, eback(k)); g.scale(s, s); g.globalAlpha = clamp(k * 3);
+    g.lineWidth = 14; g.strokeStyle = '#14063a'; g.strokeText('VERRÜCKT', 0, 0); g.fillStyle = gr; g.fillText('VERRÜCKT', 0, 0); g.restore();
+    big('UND JETZT DAS', 300, 90, '#ffffff', k);
+  }
+}
+function sF(t) {   // Von außen: langsamer, röter, blasser
+  const u = t - S_[5][0], dur = S_[6][0] - S_[5][0], k = eo(p(u, 0, dur));
+  bg([[0, '#14063a'], [.6, '#1c0850'], [1, '#04020e']]);
+  g.save(); cam(1.02 + u * .02);
+  lensedStars(540, 600, 230, t); blackhole(540, 600, 230, t, { tilt: .25 });
+  // Annäherung an den Rand, die immer langsamer wird
+  const prog = 1 - Math.exp(-u * 1.1), ax = lerp(540, 540, prog), ay = lerp(1150, 900, prog);
+  const red = clamp(prog * 1.1), al = lerp(1, .18, clamp(prog * 1.05));
+  astronaut(ax, ay, 1.3, .3, { tint: [255, 40, 40], a: al });
+  // Uhr am Astronauten: Zeiger wird immer langsamer
+  clock(ax + 210, ay - 60, 78, (1 - Math.exp(-u * 1.1)) * 9, rgb(mix([255, 255, 255], [255, 80, 80], red)), al);
+  g.restore();
+  // Freunde mit Fernrohr unten
+  g.fillStyle = '#7af0ff'; [[180, 1460], [270, 1470]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y - 60, 22, 0, 7); g.fill(); g.beginPath(); g.roundRect(x - 22, y - 36, 44, 80, 14); g.fill(); });
+  g.save(); g.translate(300, 1400); g.rotate(-.7); g.fillStyle = '#ffd23f'; g.fillRect(0, -12, 130, 24); g.restore();
+  big('VON AUSSEN GESEHEN', 230, 72, '#7af0ff', p(t, S_[5][0] + .05, S_[5][0] + .4), { ls: 1 });
+  if (u > .9) text('immer langsamer …', 540, 1180, 48, 'IDX', 'rgba(255,170,170,.85)', { alpha: eo(p(u, .9, 1.3)) });
+}
+function sG(t) {   // Für dich: normal
+  const u = t - S_[6][0];
+  bg([[0, '#0a2a6e'], [.5, '#1c0850'], [1, '#2a0630']]); aurora(t, .6, [[80, 220, 255], [255, 90, 200], [140, 90, 255]]);
+  g.save(); cam(1.05 + u * .05, -u * .03);
+  lensedStars(540, 1500, 300, t, .7);
+  astronaut(380, 900, 2.0, Math.sin(u * 1.6) * .08);
+  clock(780, 860, 150, u * 6.283 * .5, '#ffd23f');
+  g.restore();
+  big('FÜR DICH:', 230, 96, '#ffffff', p(t, S_[6][0] + .05, S_[6][0] + .35));
+  big('GANZ NORMAL', 360, 130, '#ffd23f', p(t, at(6, .55), at(6, .55) + .35), { glow: 'rgba(255,210,60,.5)' });
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(6,4,20,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '160px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-5px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#7af0ff'); gr.addColorStop(.5, '#ff5ac8'); gr.addColorStop(1, '#ffd23f');
+    g.fillStyle = gr; g.globalAlpha = eo(ke); g.translate(540, 840); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('ZEIT IST', 0, -84); g.fillText('RELATIV.', 0, 84); g.restore();
+    text('Gezeitenkraft & Zeitdilatation', 540, 1070, 44, 'IDS', 'rgba(255,255,255,.8)', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+}
+function scene(t) {
+  const i = S_.findIndex((s, k) => k === S_.length - 1 || t < S_[k + 1][0]);
+  [sA, sB, sC, sD, sE, sF, sG][Math.max(0, i)](t);
+}
+</script>
+</body></html>

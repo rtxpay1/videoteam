@@ -1,0 +1,300 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [0])[0];   // Startzeit des Teilsatzes mit diesem Wort
+const JUMP = at(0, .55);   // der große gemeinsame Sprung im Hook
+window.CFG = {
+  REPL: [['acht Milliarden', '8 Milliarden'], ['fünfhundert Millionen', '500 Millionen'], ['sechs Trilliarden', '6 Trilliarden'], ['zwölf Billionen', '12 Billionen']],
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(8|Milliarden|gleichzeitig|hochspringen|Bebt|Bahn|überrascht|500|Millionen|Tonnen|6|Trilliarden|12|Billionen|abdrückst|winziges|gemeinsam|Atom|zurück|exakt|Erdbeben|verpufft|nichts|Verrückte|trotzdem|dir|tausende|bewegt|niemand)/,
+  split: t => 24 * (1 - p(t, 0, .6)) + 30 * Math.max(0, 1 - Math.abs(t - JUMP - .5) / .3) + 26 * Math.max(0, 1 - Math.abs(t - S_[14][0]) / .3) + 18 * Math.max(0, 1 - Math.abs(t - S_[8][0]) / .3),
+  shake: t => (t > JUMP + .45 && t < JUMP + 1.1 ? 22 * (1 - (t - JUMP - .45) / .65) : 0) + (t > S_[11][0] && t < S_[12][0] ? 3 + 3 * Math.sin(t * 30) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || 'rgba(10,6,30,.85)', rot: o.rot }); }
+const kin = (i, f, d = .35) => t => p(t, at(i, f), at(i, f) + d);
+const pw = (w, d = .35) => t => p(t, ph(w), ph(w) + d);
+function stamp(s, x, y, size, col, k, rot = -.12) {
+  if (k <= 0) return; const e = eback(clamp(k));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(lerp(2.4, 1, e), lerp(2.4, 1, e)); g.globalAlpha = clamp(k * 3);
+  g.font = `${size}px IDB`; g.letterSpacing = '4px'; const w = g.measureText(s).width;
+  g.strokeStyle = col; g.lineWidth = 10; g.beginPath(); g.roundRect(-w / 2 - 34, -size * .72, w + 68, size * 1.44, 16); g.stroke();
+  g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, 0, 4); g.restore();
+}
+
+// ---------- Bausteine ----------
+// Strichmännchen: (x, y) = Fußpunkt, s = Größe, up = Arme hoch (0..1), crouch = Knie gebeugt (0..1)
+function fig(x, y, s, col, up = 0, crouch = 0, lw) {
+  g.save(); g.strokeStyle = col; g.fillStyle = col; g.lineWidth = lw || s * .09; g.lineCap = 'round'; g.lineJoin = 'round';
+  const hip = y - s * (.42 - crouch * .12), sh = hip - s * .36;
+  g.beginPath(); g.arc(x, sh - s * .17, s * .14, 0, 7); g.fill();
+  g.beginPath(); g.moveTo(x, sh); g.lineTo(x, hip);
+  g.moveTo(x - s * .2, y); g.lineTo(x - s * .1 - crouch * s * .08, hip + (y - hip) * .5); g.lineTo(x, hip); g.lineTo(x + s * .1 + crouch * s * .08, hip + (y - hip) * .5); g.lineTo(x + s * .2, y);
+  g.moveTo(x - s * .3, sh + s * .2 - up * s * .45); g.lineTo(x, sh + s * .03); g.lineTo(x + s * .3, sh + s * .2 - up * s * .45);
+  g.stroke(); g.restore();
+}
+// Sprungkurve: 0 = am Boden, 1 = höchster Punkt; Vorbereitung (Hocke) davor
+function hop(t, t0, d = .7) { const u = (t - t0) / d; return u < 0 || u > 1 ? 0 : Math.sin(u * Math.PI); }
+function crouchAt(t, t0) { return clamp(1 - Math.abs(t - t0 + .15) / .2); }
+function globe(x, y, r, o = {}) {
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 1.7, [60, 160, 255], .4); g.restore();
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#7fd4ff'); gr.addColorStop(.6, '#1f6fd6'); gr.addColorStop(1, '#0c2f7a');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, 7); g.clip();
+  const sp = o.spin || 0; g.fillStyle = 'rgba(80,210,120,.92)';
+  [[-.35, -.2, .32, .22], [.25, .1, .26, .34], [-.1, .45, .2, .14], [.7, -.4, .22, .16], [-.8, .2, .2, .3]].forEach(([dx, dy, w, h]) => { const xx = ((dx + sp + 1.5) % 3) - 1.5; g.beginPath(); g.ellipse(x + xx * r, y + dy * r, w * r, h * r, .4, 0, 7); g.fill(); });
+  g.restore();
+  if (o.face) {   // freundliches Gesicht für die Erde
+    g.save(); g.fillStyle = '#0a1a3a'; const sl = o.sleep || 0;
+    if (sl > .5) { g.lineWidth = r * .04; g.strokeStyle = '#0a1a3a'; [-1, 1].forEach(sx => { g.beginPath(); g.arc(x + sx * r * .28, y - r * .1, r * .1, .2, Math.PI - .2); g.stroke(); }); }
+    else [-1, 1].forEach(sx => { g.beginPath(); g.ellipse(x + sx * r * .28, y - r * .12, r * .07, r * .11, 0, 0, 7); g.fill(); });
+    g.lineWidth = r * .04; g.strokeStyle = '#0a1a3a'; g.beginPath(); g.arc(x, y + r * .15, r * .22, .3, Math.PI - .3); g.stroke(); g.restore();
+  }
+}
+const CROWD = (() => { const r = rng(8); const out = []; for (let row = 0; row < 7; row++) for (let i = 0; i < 9 + row; i++) out.push({ x: (i + .5) * W / (9 + row) + (r() - .5) * 30, row, c: SPEC[(r() * 7) | 0], d: r() * .08 }); return out; })();
+function crowd(t, t0, y0 = 1300, o = {}) {
+  CROWD.forEach(c => {
+    const s = (o.size || 120) * (1 - c.row * .09), y = y0 - c.row * (o.gap || 70), jy = hop(t, t0 + c.d) * (o.height || 260) * (1 - c.row * .08);
+    fig(c.x, y - jy, s, rgb(mix(c.c, [20, 10, 40], c.row * .1)), hop(t, t0 + c.d), crouchAt(t, t0 + c.d));
+  });
+}
+function rings(t, x, y, t0, col = [255, 255, 255], n = 4, sp = 600) {
+  for (let i = 0; i < n; i++) { const u = t - t0 - i * .18; if (u < 0 || u > 1.4) continue; g.save(); g.strokeStyle = rgb(col, (1 - u / 1.4) * .8); g.lineWidth = 10 * (1 - u / 1.4) + 2; g.beginPath(); g.ellipse(x, y, u * sp, u * sp * .32, 0, 0, 7); g.stroke(); g.restore(); }
+}
+
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+SC[0] = t => {   // Hook: Menschenmenge springt gleichzeitig, Aufprall mit Druckwelle
+  bg([[0, '#ff7a1a'], [.55, '#ff3a6a'], [1, '#3a0a6a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 20; i++) { const a = i / 20 * 6.283 + t * .4; g.fillStyle = `rgba(255,255,255,${i % 2 ? .04 : .08})`; g.beginPath(); g.moveTo(540, 1250); g.lineTo(540 + Math.cos(a) * 1900, 1250 + Math.sin(a) * 1900); g.lineTo(540 + Math.cos(a + .12) * 1900, 1250 + Math.sin(a + .12) * 1900); g.fill(); } g.restore();
+  g.save(); cam(1.25 - eo(p(t, 0, .6)) * .2 + (punch(t, JUMP + .5, .14) - 1));
+  g.fillStyle = '#2a0a3a'; g.fillRect(-100, 1310, W + 200, 800);
+  crowd(t, JUMP, 1320, { height: 300 });
+  rings(t, 540, 1330, JUMP + .5, [255, 230, 120]);
+  g.restore();
+  big('WAS WÄRE, WENN', 280, 96, '#ffffff', p(t, .2, .55));
+  big('ALLE', 450, 170, '#ffd23f', p(t, at(0, .25), at(0, .25) + .3), { glow: 'rgba(255,210,60,.7)' });
+  big('GLEICHZEITIG', 610, 120, '#ffffff', p(t, at(0, .6), at(0, .6) + .3));
+  big('SPRINGEN?', 760, 150, '#7af0ff', p(t, at(0, .8), at(0, .8) + .3), { glow: 'rgba(120,240,255,.7)' });
+};
+SC[1] = t => {   // Fragen: Erde wackelt, Bahn wird gestrichelt, Glitch-Wörter
+  const u = t - S_[1][0], q2 = ph('Fliegt sie'), q3 = ph('Die Antwort');
+  bg([[0, '#0a0640'], [1, '#1e0a5a']]); stars(t, .9, u * .3);
+  g.save(); cam(1 + u * .02);
+  g.save(); g.strokeStyle = 'rgba(255,255,255,.3)'; g.setLineDash([18, 16]); g.lineWidth = 5; g.beginPath(); g.ellipse(540, 980, 460, 300, 0, 0, 7); g.stroke(); g.setLineDash([]); g.restore();
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(540, 980, 130, [255, 200, 80], .9); g.restore(); g.fillStyle = '#ffe080'; g.beginPath(); g.arc(540, 980, 60, 0, 7); g.fill();
+  const wob = t < q2 ? Math.sin(u * 40) * 14 * p(t, S_[1][0] + .2, S_[1][0] + .5) : 0, off = eo(p(t, q2, q2 + 1.2)) * (1 - p(t, q3, q3 + .5));
+  const a = 1.6 + u * .3, ex = 540 + Math.cos(a) * 460 + wob - off * 150, ey = 980 + Math.sin(a) * 300 + off * 180;
+  globe(ex, ey, 110, { spin: u * .2 });
+  g.restore();
+  big('BEBT SIE?', 330, 130, '#ffffff', kin(1, .02)(t), { alpha: 1 - p(t, q2 - .1, q2), rot: Math.sin(u * 30) * .02 });
+  big('AUS DER BAHN?', 330, 120, '#ff5a8a', p(t, q2, q2 + .3), { alpha: 1 - p(t, q3 - .1, q3) });
+  big('DIE ANTWORT …', 1420, 96, '#ffd23f', p(t, q3, q3 + .3), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[2] = t => {   // Zähler: Gewicht aller Menschen wächst Icon für Icon
+  const u = t - S_[2][0], w0 = ph('Alle Menschen'), k = eio(p(t, S_[2][0] + .2, S_[3][0] - .3));
+  bg([[0, '#00b0a0'], [1, '#00404a']]);
+  const n = Math.floor(k * 120);
+  for (let i = 0; i < 120; i++) { const x = 90 + (i % 12) * 82, y = 560 + Math.floor(i / 12) * 92, on = i < n; const s = on ? eback(clamp((k * 120 - i) / 3)) : 0; if (s > 0) fig(x, y + 40, 70 * s, on ? rgb(SPEC[i % 7]) : '#fff', .3); }
+  const tons = Math.round(5e8 * k);
+  big('ZUSAMMEN', 300, 96, '#ffffff', kin(2, .02)(t));
+  big(tons.toLocaleString('de-DE'), 1340, 130, '#ffffff', p(t, S_[2][0] + .2, S_[2][0] + .5), { ls: -4, glow: 'rgba(255,255,255,.5)' });
+  big('TONNEN', 1460, 70, '#ffd23f', p(t, S_[2][0] + .4, S_[2][0] + .7), { ls: 8 });
+};
+SC[3] = t => {   // Waage: Menschen gegen die Erde, die Erde knallt runter
+  const u = t - S_[3][0], ea = ph('Aber die Erde'), tilt = lerp(-.12, .42, eback(p(t, ea + .2, ea + .9))) + Math.sin(u * 3) * .03;
+  bg([[0, '#ff5ac8'], [1, '#5a0a6a']]);
+  g.save(); cam(1.02 + u * .02);
+  g.fillStyle = '#2a0a3a'; g.beginPath(); g.moveTo(540, 1080); g.lineTo(440, 1360); g.lineTo(640, 1360); g.fill();
+  g.save(); g.translate(540, 1080); g.rotate(tilt); g.fillStyle = '#ffd23f'; g.fillRect(-440, -14, 880, 28);
+  g.save(); g.translate(-360, -14); for (let i = 0; i < 14; i++) fig((i % 5) * 34 - 70, -Math.floor(i / 5) * 60, 60, rgb(SPEC[i % 7]), .5); g.restore();
+  const ek = eback(p(t, ea, ea + .5)); if (ek > 0) { g.save(); g.translate(330, -14 - 150 * ek); globe(0, 0, 150 * ek, { spin: u * .2 }); g.restore(); }
+  g.restore(); g.restore();
+  big('KLINGT RIESIG', 330, 110, '#ffffff', kin(3, .02)(t), { alpha: 1 - p(t, ea - .1, ea) });
+  big('DIE ERDE:', 280, 100, '#ffffff', p(t, ea, ea + .3));
+  big('6 TRILLIARDEN T', 420, 100, '#7af0ff', p(t, ea + .5, ea + .85), { glow: 'rgba(120,240,255,.7)' });
+};
+SC[4] = t => {   // Maßstab: Zoom raus von einem Pünktchen Mensch auf die riesige Erde
+  const u = t - S_[4][0], k = eio(p(t, S_[4][0] + .1, S_[4][1] - .3));
+  bg([[0, '#06042a'], [1, '#12063a']]); stars(t, .8);
+  g.save(); const z = Math.pow(60, 1 - k); g.translate(540, 1000); g.scale(z, z); g.translate(-540, -1000 + 420);
+  globe(540, 1000, 420, { spin: u * .1 });
+  fig(540, 580 + 0.5, 3, '#ffd23f', 1, 0, .5);
+  g.restore();
+  const n = Math.round(12e12 * eio(p(t, at(4, .2), at(4, .7))));
+  big(n.toLocaleString('de-DE') + ' ×', 330, 92, '#ffd23f', kin(4, .15)(t), { ls: -3, glow: 'rgba(255,210,60,.6)' });
+  big('SCHWERER', 450, 100, '#ffffff', kin(4, .45)(t));
+};
+SC[5] = t => {   // Strichzeichnung: Kraftpfeile beim Absprung zeichnen sich selbst
+  const u = t - S_[5][0], why = ph('Weil du'), k = p(t, why, S_[6][0]);
+  bg([[0, '#fff4d8'], [1, '#ffd0a0']]);
+  g.save(); g.strokeStyle = 'rgba(120,80,40,.12)'; g.lineWidth = 2; for (let x = 0; x <= W; x += 54) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); } for (let y = 0; y <= H; y += 54) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.restore();
+  g.save(); cam(1.05 - u * .01);
+  g.fillStyle = '#3a8a4a'; g.fillRect(0, 1200, W, 40);
+  fig(540 + Math.sin(u * 2.2) * 30, 1200, 360, '#2a1a40', .2 + .2 * Math.sin(u * 4), t < why ? .3 + .3 * Math.sin(u * 5) : .6 * (1 - p(t, why + 1.4, why + 1.7)));
+  drawOn([[[.5, .3], [.5, .72]], [[.44, .62], [.5, .72], [.56, .62]]], eio(p(t, why + .2, why + 1)), 400, 1290, 300, 300, '#ff3b4a', 16);
+  drawOn([[[.5, .7], [.5, .28]], [[.44, .38], [.5, .28], [.56, .38]]], eio(p(t, why + .8, why + 1.6)), 680, 980, 300, 300, '#1a8aff', 16);
+  g.restore();
+  big('WARUM', 300, 110, '#2a1a40', kin(5, .02)(t), { sc2: 'rgba(255,255,255,.9)' });
+  big('BEWEGT SIE SICH?', 430, 90, '#ff3b4a', kin(5, .12)(t), { sc2: 'rgba(255,255,255,.9)' });
+  text('Abdruck', 260, 1350, 50, 'IDX', '#ff3b4a', { alpha: eo(p(t, why + .6, why + 1)) });
+  text('Sprung', 840, 900, 50, 'IDX', '#1a8aff', { alpha: eo(p(t, why + 1.2, why + 1.6)) });
+};
+SC[6] = t => {   // Split-Screen: du gehst hoch, die Erde weicht nach unten aus
+  const u = t - S_[6][0], jk = hop(t, at(6, .12), 1.6);
+  splitScreen(p(t, S_[6][0], S_[6][0] + .5), () => {
+    bg([[0, '#1aa0ff'], [1, '#0a3a8a']]);
+    g.fillStyle = '#3aaa5a'; g.fillRect(0, 1300, W, 600);
+    fig(300, 1300 - jk * 420, 260, '#ffffff', jk, 0);
+    if (jk > .1) arrow(300, 1000 - jk * 420, 300, 820 - jk * 420, [255, 255, 255], 12, jk);
+  }, () => {
+    bg([[0, '#2a0a5a'], [1, '#0a0420']]); stars(t, .7);
+    const d = jk * 22;
+    globe(800, 1000 + d, 200, { spin: u * .1 });
+    if (jk > .1) arrow(800, 1260 + d, 800, 1360 + d, [255, 210, 60], 12, jk);
+    text('↓ winzig', 800, 1440, 52, 'IDX', '#ffd23f', { alpha: jk });
+  }, { line: '#ffd23f' });
+  big('DU: HOCH', 300, 84, '#ffffff', kin(6, .05)(t), { x: 290 });
+  big('ERDE: RUNTER', 300, 70, '#ffd23f', kin(6, .2)(t), { x: 790 });
+  big('BEI JEDEM SPRUNG', 1460, 64, '#ffffff', pw('Das passiert')(t), { ls: 2 });
+};
+SC[7] = t => {   // 3D-Drehung: Erde mit Menschen rundherum, alle drücken gleichzeitig
+  const u = t - S_[7][0], jt = at(7, .45), jk = hop(t, jt, .8);
+  bg([[0, '#0a2a5a'], [1, '#02081a']]); stars(t, .8, u * .2);
+  spin3d(Math.sin(u * 1.2) * .8, 540, 980, () => {
+    globe(540, 980, 260, { spin: u * .3 });
+    for (let i = 0; i < 28; i++) { const a = i / 28 * 6.283 + u * .3, r = 262 + jk * 70; g.save(); g.translate(540 + Math.cos(a) * r, 980 + Math.sin(a) * r); g.rotate(a + Math.PI / 2); fig(0, 0, 60, rgb(SPEC[i % 7]), jk, crouchAt(t, jt)); g.restore(); }
+  }, { skew: .06 });
+  rings(t, 540, 980, jt + .8, [120, 220, 255], 3, 500);
+  big('ALLE', 300, 150, '#ffd23f', kin(7, .02)(t), { glow: 'rgba(255,210,60,.6)' });
+  big('GEMEINSAM', 450, 110, '#ffffff', kin(7, .3)(t));
+};
+SC[8] = t => {   // Warp-Zoom ins Atom: so weit bewegt sich die Erde
+  const u = t - S_[8][0], ans = ph('Weniger als'), z = p(t, S_[8][0], ans + .6);
+  bg([[0, '#1a0040'], [1, '#000010']]);
+  warp(u, 2.5 * (1 - z * .7), 1 - p(t, ans + .4, ans + .9));
+  const ak = eo(p(t, ans + .2, ans + 1));
+  if (ak > 0) {
+    g.save(); g.globalAlpha = ak; g.translate(540, 980); g.scale(lerp(.3, 1, ak), lerp(.3, 1, ak));
+    g.save(); g.globalCompositeOperation = 'lighter'; glow(0, 0, 140, [255, 120, 80], .9); g.restore();
+    for (let i = 0; i < 3; i++) { g.save(); g.rotate(i * 1.05); g.strokeStyle = 'rgba(120,220,255,.7)'; g.lineWidth = 5; g.beginPath(); g.ellipse(0, 0, 330, 110, 0, 0, 7); g.stroke(); const a = u * (3 + i); g.fillStyle = '#7af0ff'; g.beginPath(); g.arc(Math.cos(a) * 330, Math.sin(a) * 110, 18, 0, 7); g.fill(); g.restore(); }
+    g.fillStyle = '#ff6a4a'; g.beginPath(); g.arc(0, 0, 50, 0, 7); g.fill();
+    g.restore();
+    const lk = eo(p(t, ans + 1, ans + 1.6)); g.save(); g.strokeStyle = '#ffd23f'; g.lineWidth = 8; g.shadowColor = '#ffd23f'; g.shadowBlur = 20; g.beginPath(); g.moveTo(538, 1220); g.lineTo(538 + 4 * lk, 1220); g.stroke(); g.restore();
+    text('ein Atom', 540, 1300, 50, 'IDX', '#7af0ff', { alpha: lk });
+  }
+  big('WIE WEIT?', 330, 140, '#ffffff', kin(8, .02)(t), { glow: 'rgba(200,160,255,.6)' });
+  big('< 1/1000 ATOM', 1440, 96, '#ffd23f', p(t, ans + .9, ans + 1.25), { glow: 'rgba(255,210,60,.7)' });
+};
+SC[9] = t => {   // Feder: weg und genau wieder zurück (elastisches Zurückschnellen)
+  const u = t - S_[9][0], land = ph('Wenn wir landen'), go = eo(p(t, S_[9][0] + .2, land)), back = 1 - p(t, land + .3, land + 1.4);
+  const d = 260 * go * (back < 1 ? Math.cos((1 - back) * 9) * Math.pow(back, 1.5) : 1);
+  bg([[0, '#00c8b0'], [1, '#00505a']]);
+  g.save(); g.strokeStyle = 'rgba(255,255,255,.5)'; g.setLineDash([14, 12]); g.lineWidth = 4; g.beginPath(); g.arc(540, 980, 230, 0, 7); g.stroke(); g.setLineDash([]); g.restore();
+  g.save(); g.strokeStyle = '#ffd23f'; g.lineWidth = 10; g.beginPath(); for (let i = 0; i <= 40; i++) { const y = 380 + (980 - 230 + d - 380) * i / 40, x = 540 + (i % 2 ? 30 : -30) * (i > 0 && i < 40); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); g.restore();
+  globe(540, 980 + d, 230, { spin: u * .2 });
+  big('SELBST DAS', 260, 100, '#ffffff', kin(9, .02)(t), { sc2: 'rgba(0,40,50,.85)' });
+  big('BLEIBT NICHT', 380, 110, '#ffd23f', kin(9, .12)(t), { sc2: 'rgba(0,40,50,.85)' });
+  big('ZURÜCK!', 1440, 130, '#ffffff', p(t, land + .4, land + .75), { sc2: 'rgba(0,40,50,.85)' });
+};
+SC[10] = t => {   // Geister-Echo: alte und neue Position decken sich exakt, Fadenkreuz
+  const u = t - S_[10][0], k = eio(p(t, S_[10][0] + .1, at(10, .6)));
+  bg([[0, '#1a1a3a'], [1, '#05050f']]);
+  g.save(); g.globalAlpha = .35; globe(540 + (1 - k) * 160, 980 - (1 - k) * 90, 260); g.restore();
+  globe(540, 980, 260, { spin: u * .1 });
+  const c = mix([255, 80, 80], [80, 255, 120], k);
+  g.save(); g.strokeStyle = rgb(c); g.lineWidth = 6; g.shadowColor = rgb(c); g.shadowBlur = 20; g.beginPath(); g.arc(540, 980, 330, 0, 7); g.moveTo(540, 600); g.lineTo(540, 700); g.moveTo(540, 1260); g.lineTo(540, 1360); g.moveTo(160, 980); g.lineTo(260, 980); g.moveTo(820, 980); g.lineTo(920, 980); g.stroke(); g.restore();
+  big('EXAKT', 300, 150, '#7dff6a', kin(10, .3)(t), { glow: 'rgba(120,255,100,.6)' });
+  big('0,000000 m', 1440, 90, '#ffffff', kin(10, .55)(t), { ls: -2 });
+};
+SC[11] = t => {   // Seismograf: die Linie zuckt kaum
+  const u = t - S_[11][0], calm = ph('Auch da');
+  bg([[0, '#f2ead8'], [1, '#d8cbb0']]);
+  g.save(); g.strokeStyle = 'rgba(80,60,40,.15)'; g.lineWidth = 2; for (let y = 700; y <= 1260; y += 70) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.restore();
+  g.save(); g.strokeStyle = '#d0263a'; g.lineWidth = 6; g.lineJoin = 'round'; g.beginPath();
+  const head = 860;
+  for (let x = 0; x <= head; x += 6) { const tt = t - (head - x) / 400, amp = tt < calm ? 60 * (.5 + .5 * Math.sin(tt * 3)) : 6; const y = 980 + Math.sin(tt * 60 + x * .1) * amp * (.6 + .4 * Math.sin(x * .05)); x ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.stroke(); g.fillStyle = '#2a1a10'; g.beginPath(); g.arc(head, 980, 16, 0, 7); g.fill(); g.restore();
+  g.fillStyle = '#3a2a1a'; g.fillRect(head + 16, 960, 220, 40);
+  big('ERDBEBEN?', 330, 130, '#2a1a10', kin(11, .02)(t), { sc2: 'rgba(255,255,255,.9)' });
+  big('KAUM ETWAS', 1420, 110, '#d0263a', p(t, calm, calm + .35), { sc2: 'rgba(255,255,255,.9)' });
+};
+SC[12] = t => {   // Weltkarte: Stöße überall, Wellenringe laufen aus und verpuffen
+  const u = t - S_[12][0], vp = ph('Der Stoß');
+  bg([[0, '#0a5fa8'], [1, '#063a6e']]);
+  g.save(); cam(1.04 + u * .02);
+  const R = rng(12); const pts = Array.from({ length: 26 }, () => [120 + R() * 840, 620 + R() * 760, R()]);
+  [[300, 760, 160, 110], [720, 700, 140, 100], [480, 1060, 180, 120], [820, 1160, 110, 140], [250, 1260, 100, 80]].forEach(([x, y, w, h], i) => { g.fillStyle = '#3fb06a'; g.beginPath(); g.ellipse(x, y, w, h, i * .7, 0, 7); g.fill(); });
+  pts.forEach(([x, y, d]) => { const t0 = S_[12][0] + .2 + d * 1.2; const fade = 1 - p(t, vp + .2, vp + 1.6); g.save(); g.globalAlpha = fade; rings(t, x, y, t0, [255, 255, 255], 2, 220); g.restore(); g.fillStyle = `rgba(255,210,60,${fade})`; g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); });
+  g.restore();
+  big('ÜBERALL VERTEILT', 300, 92, '#ffffff', kin(12, .02)(t));
+  big('VERPUFFT', 1420, 130, '#ffd23f', p(t, vp + .4, vp + .75), { glow: 'rgba(255,210,60,.6)' });
+};
+SC[13] = t => {   // Ruhige Wellen: die Erde schläft weiter
+  const u = t - S_[13][0];
+  bg([[0, '#8fd0ff'], [1, '#2a6ad0']]);
+  liquid(t * .5, [[120, 200, 255], [80, 160, 240], [50, 120, 220], [30, 80, 180]], { y0: 1200, gap: 120, amp: 30 });
+  g.save(); g.translate(540, 900 + Math.sin(u * 2) * 12); globe(0, 0, 260, { face: true, sleep: 1, spin: u * .05 }); g.restore();
+  ['Z', 'z', 'z'].forEach((z, i) => { const k = ((u * .6 + i * .33) % 1); text(z, 760 + k * 120, 640 - k * 260, 70 + i * 10, 'IDB', '#ffffff', { alpha: Math.sin(k * Math.PI) }); });
+  big('DIE ERDE MERKT', 300, 96, '#ffffff', kin(13, .02)(t), { sc2: 'rgba(20,40,120,.8)' });
+  big('FAST NICHTS', 430, 120, '#ffd23f', kin(13, .4)(t), { sc2: 'rgba(20,40,120,.8)' });
+};
+SC[14] = t => {   // Twist: Iris öffnet auf DICH, Zeitlupen-Sprung
+  const u = t - S_[14][0], you = ph('Und das passiert'), jk = hop(t, you + .1, 2.4);
+  bg([[0, '#ff2a6a'], [1, '#6a0040']]);
+  big('DAS', 640, 110, '#ffffff', p(t, S_[14][0] + .05, S_[14][0] + .35));
+  big('VERRÜCKTE:', 800, 150, '#ffd23f', p(t, S_[14][0] + .25, S_[14][0] + .6), { glow: 'rgba(255,210,60,.8)', from: 2.6 });
+  big('SIE HAT SICH BEWEGT', 1000, 76, '#ffffff', pw('Bewegt hat')(t), { alpha: 1 - p(t, you - .1, you) });
+  iris(p(t, you, you + .6), 540, 1000, () => {
+    bg([[0, '#ffe08a'], [1, '#ff9a3a']]);
+    g.fillStyle = '#3aaa5a'; g.fillRect(0, 1300, W, 600);
+    g.save(); g.globalAlpha = .25; fig(540, 1300 - jk * 300 + 30, 360, '#000', jk, 0); g.restore();
+    fig(540, 1300 - jk * 300, 360, '#2a1a40', jk, crouchAt(t, you + .1));
+    big('DU!', 360, 200, '#ff3a6a', p(t, you + .4, you + .7), { glow: 'rgba(255,60,110,.6)' });
+    text('Zeitlupe', 880, 560, 44, 'IDX', 'rgba(60,20,40,.7)', { alpha: jk });
+  }, { ring: '#ffffff' });
+};
+SC[15] = t => {   // Pointe: Zähler deiner Sprünge, Partikel-Explosion, Endkarte
+  const u = t - S_[15][0], n = Math.round(10000 * eio(p(t, S_[15][0] + .2, at(15, .55))));
+  bg([[0, '#7a2aff'], [.5, '#ff3a8a'], [1, '#ff9a3a']]);
+  aurora(t, .8);
+  g.save(); cam(1 + Math.sin(u * 2) * .02); globe(540, 1000, 200, { face: true, spin: u * .2 });
+  for (let i = 0; i < 5; i++) { const a = i * 1.26 + u, jk = hop(t, S_[15][0] + i * .5, .6) + hop(t, S_[15][0] + 2.5 + i * .4, .6); g.save(); g.translate(540 + Math.cos(a) * 210, 1000 + Math.sin(a) * 210); g.rotate(a + Math.PI / 2); fig(0, -jk * 40, 50, '#ffffff', jk, 0); g.restore(); }
+  g.restore();
+  burst(t, at(15, .55), 540, 1000, { scale: 1 });
+  big(n.toLocaleString('de-DE'), 330, 150, '#ffffff', kin(15, .05)(t), { ls: -4, glow: 'rgba(255,255,255,.5)' });
+  big('SPRÜNGE', 460, 80, '#ffd23f', kin(15, .1)(t), { ls: 6 });
+  big('KEINER HAT\'S GEMERKT', 1430, 70, '#ffffff', pw('Nur hat')(t));
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(30,6,40,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '150px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-5px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#7af0ff'); gr.addColorStop(.5, '#ffd23f'); gr.addColorStop(1, '#ff5ac8');
+    g.fillStyle = gr; g.translate(540, 840); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('SPRING', 0, -85); g.fillText('MAL.', 0, 85); g.restore();
+    text('Die Erde weicht dir aus.', 540, 1080, 48, 'IDS', '#ffffff', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+};
+function scene(t) {
+  let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
+  SC[i](t);
+}
+</script>
+</body></html>

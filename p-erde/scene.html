@@ -1,0 +1,207 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, ph = i => TIMING.phrases[i][0], pe = i => TIMING.phrases[i][1];
+const T = { b: S_[1][0], c: S_[2][0], d: S_[3][0], e: S_[4][0], f: S_[5][0], end: S_[5][1] + .2 };
+const STOP = ph(1) + (pe(1) - ph(1)) * .82;   // Moment "aufhört"
+window.CFG = {
+  REPL: [['sechzehnhundertsiebzig', '1.670']],
+  DUR: TIMING.dur, CUTS: [T.b, T.c, T.d, T.e, T.f], PHRASES: TIMING.phrases, CAP_END: T.end,
+  KEY: /^(Erde|plötzlich|aufhört|drehen|Äquator|1\.670|Kilometern|Boden|weiter|Luft|Ozeane|Häuser|du|Stürme|Flugzeug|Tag|Jahr|Sonne|Nacht|Gedankenexperiment|bremst|Millisekunden|Jahrhundert)/,
+  split: t => 28 * Math.max(0, 1 - Math.abs(t - STOP) / .25) + 8 * (1 - p(t, 0, .6)) + 12 * Math.max(0, 1 - Math.abs(t - ph(4) - .35) / .2),
+  shake: t => (t > STOP && t < STOP + .4 ? 16 * (1 - (t - STOP) / .4) : 0) + (t > ph(4) + .35 && t < ph(4) + .85 ? 12 * (1 - (t - ph(4) - .35) / .5) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script>
+// ---------- Punkt-Globus (Landmaske in 5°-Zellen: [Breitenzeile, von Spalte, bis Spalte]) ----------
+const LAND = [[1,18,22],[1,24,32],[2,12,22],[2,22,32],[2,39,40],[2,46,47],[2,55,56],[3,3,8],[3,11,21],[3,25,32],[3,46,47],[3,50,71],[4,3,8],[4,8,24],[4,26,31],[4,31,33],[4,39,42],[4,42,71],
+[5,3,8],[5,8,23],[5,26,28],[5,37,42],[5,42,69],[6,9,16],[6,20,24],[6,34,35],[6,38,41],[6,41,68],[7,10,25],[7,34,35],[7,36,44],[7,44,63],[8,11,25],[8,35,44],[8,44,64],[9,11,22],[9,34,36],[9,38,42],[9,41,45],[9,45,62],[9,64,64],
+[10,12,21],[10,34,35],[10,35,38],[10,40,41],[10,41,48],[10,48,60],[10,61,61],[10,62,64],[11,12,20],[11,13,15],[11,34,42],[11,43,48],[11,48,60],[11,62,62],[12,13,16],[12,19,19],[12,33,43],[12,43,47],[12,48,60],
+[13,14,16],[13,19,21],[13,32,43],[13,44,47],[13,50,54],[13,55,58],[14,15,18],[14,32,44],[14,44,46],[14,50,53],[14,55,57],[14,60,60],[15,17,19],[15,21,23],[15,32,44],[15,44,46],[15,51,51],[15,55,57],[15,60,60],
+[16,20,25],[16,33,45],[16,52,52],[16,56,56],[16,60,60],[17,20,26],[17,37,44],[17,55,59],[18,20,29],[18,37,44],[18,56,61],[18,62,66],[19,20,29],[19,38,44],[19,57,59],[19,64,66],[20,20,28],[20,38,44],[20,45,46],[20,62,64],
+[21,21,28],[21,38,43],[21,44,46],[21,60,65],[22,22,28],[22,38,43],[22,44,45],[22,58,66],[23,22,26],[23,39,42],[23,58,66],[24,21,25],[24,39,42],[24,59,66],[25,21,24],[25,64,66],[25,71,71],[26,21,23],[26,65,65],[26,70,71],[27,21,22],[27,69,70],[28,21,22],[29,22,22],
+[32,0,71],[33,7,23],[33,33,71],[34,0,71],[35,0,71]];
+const LANDPTS = (() => { const pts = []; LAND.forEach(([r, c0, c1]) => { for (let c = c0; c <= c1; c++) for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) pts.push([(90 - r * 5 - 1.25 - a * 2.5) * Math.PI / 180, (-180 + c * 5 + 1.25 + b * 2.5) * Math.PI / 180]); }); return pts; })();
+const OCEAN = (() => { const pts = []; for (let la = -80; la <= 80; la += 7.5) for (let lo = -180; lo < 180; lo += 7.5) pts.push([la * Math.PI / 180, lo * Math.PI / 180]); return pts; })();
+function globe(x, y, R, rot, o = {}) {
+  const tilt = o.tilt ?? .32, ct = Math.cos(tilt), st = Math.sin(tilt), sun = o.sun ?? null;
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, R * 1.55, o.atm || [60, 150, 255], .45 * (o.a ?? 1)); g.restore();
+  g.save(); g.globalAlpha = o.a ?? 1;
+  const gr = g.createRadialGradient(x - R * .35, y - R * .35, R * .1, x, y, R); gr.addColorStop(0, '#1b4fb8'); gr.addColorStop(1, '#071a52');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, R, 0, 7); g.fill();
+  const proj = (la, lo) => { const l = lo + rot, cl = Math.cos(la); const X = cl * Math.sin(l), Y0 = Math.sin(la), Z0 = cl * Math.cos(l); return [X, -(ct * Y0 - st * Z0), st * Y0 + ct * Z0, l]; };
+  OCEAN.forEach(([la, lo]) => { const [X, Y, Z] = proj(la, lo); if (Z <= 0) return; g.fillStyle = `rgba(110,170,255,${.18 * Z})`; g.fillRect(x + X * R - 1.5, y + Y * R - 1.5, 3, 3); });
+  const ds = R / 105;
+  LANDPTS.forEach(([la, lo]) => {
+    const [X, Y, Z, l] = proj(la, lo); if (Z <= 0) return;
+    let lit = 1; if (sun != null) lit = clamp(.25 + 1.6 * Math.cos(lo + rot - sun) * Math.cos(la));
+    const c = la < -1.1 ? [235, 245, 255] : mix([60, 220, 140], [255, 214, 90], clamp((Math.abs(la) < .55 ? .6 : .1)));
+    g.fillStyle = rgb(mix([20, 30, 70], c, lit), .5 + .5 * Z); const s = ds * (1.6 + Z * 1.6); g.fillRect(x + X * R - s / 2, y + Y * R - s / 2, s, s);
+  });
+  if (o.equator) { g.strokeStyle = `rgba(255,214,60,${o.equator})`; g.lineWidth = 5; g.shadowColor = '#ffd23f'; g.shadowBlur = 18; g.beginPath(); for (let i = 0; i <= 90; i++) { const lo = -Math.PI + i / 90 * 2 * Math.PI; const [X, Y, Z] = proj(0, lo); if (Z > 0) g.lineTo(x + X * R, y + Y * R); else g.moveTo(x + X * R, y + Y * R); } g.stroke(); g.shadowBlur = 0; }
+  if (sun != null) { const lx = Math.sin(sun - 0), sh = g.createLinearGradient(x - R * Math.sign(lx || 1), y, x + R * Math.sign(lx || 1), y); }
+  g.strokeStyle = 'rgba(160,210,255,.6)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, R, 0, 7); g.stroke();
+  g.restore();
+  return proj;
+}
+
+// ---------- Szenen ----------
+function rotAt(t) {  // Drehwinkel: rasend schnell im Hook, abrupter Stopp, danach ruhig
+  if (t < STOP) return t * 7 + t * t * 2;
+  const s0 = STOP * 7 + STOP * STOP * 2; return s0;
+}
+function sceneA(t) {
+  bg([[0, '#1a0a55'], [.55, '#0b2a7a'], [1, '#04102e']]); stars(t, .9, t < STOP ? t * 4 : STOP * 4); aurora(t, .7);
+  const frozen = t >= STOP;
+  if (!frozen) { g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 26; i++) { const a = i / 26 * 6.283 + t * 4; g.strokeStyle = `rgba(140,200,255,${.25})`; g.lineWidth = 5; g.beginPath(); g.arc(540, 860, 430 + (i % 4) * 26, a, a + .35); g.stroke(); } g.restore(); }
+  const sc = 1 + (frozen ? .08 * (1 - eo(p(t, STOP, STOP + .35))) : 0);
+  g.save(); g.translate(540, 860); g.scale(sc, sc); g.translate(-540, -860);
+  globe(540, 860, 380, rotAt(t));
+  g.restore();
+  if (frozen) {
+    const k = p(t, STOP, STOP + .3);
+    g.fillStyle = `rgba(255,255,255,${(1 - k) * .55})`; g.fillRect(0, 0, W, H);
+    text('STOPP.', 540, 1370, 230, 'IDB', '#ff4a5e', { sc: lerp(2.6, 1, eback(k)), alpha: clamp(k * 3), ls: -8, glow: 'rgba(255,60,90,.7)', blur: 50, stroke: 12, strokeColor: '#1a0a40' });
+  }
+  slam(['WAS', 'WÄRE,', 'WENN…'], 540, 290, 92, 'IDB', '#ffffff', { t, s: .5 }, .25, { ls: -3 });
+  const out = eio(p(t, T.b - .35, T.b)); if (out > 0) { g.fillStyle = `rgba(4,8,30,${out})`; g.fillRect(0, 0, W, H); }
+}
+
+function gauge(x, y, r, v, max, k) {
+  g.save(); g.globalAlpha = eo(k);
+  const a0 = Math.PI * .8, a1 = Math.PI * 2.2, av = lerp(a0, a1, clamp(v / max));
+  g.lineCap = 'round'; g.lineWidth = 26; g.strokeStyle = 'rgba(255,255,255,.12)'; g.beginPath(); g.arc(x, y, r, a0, a1); g.stroke();
+  const gr = g.createLinearGradient(x - r, 0, x + r, 0); gr.addColorStop(0, '#3fd0ff'); gr.addColorStop(.6, '#ffd23f'); gr.addColorStop(1, '#ff4a5e');
+  g.strokeStyle = gr; g.shadowColor = 'rgba(255,200,80,.6)'; g.shadowBlur = 24; g.beginPath(); g.arc(x, y, r, a0, av); g.stroke(); g.shadowBlur = 0;
+  g.strokeStyle = '#ffffff'; g.lineWidth = 8; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(av) * (r - 40), y + Math.sin(av) * (r - 40)); g.stroke();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 14, 0, 7); g.fill();
+  g.restore();
+  text(Math.round(v).toLocaleString('de-DE'), x, y + r * .55, 120, 'IDB', '#ffffff', { alpha: eo(k), ls: -3 });
+  text('km/h', x, y + r * .55 + 82, 44, 'IDX', '#ffd23f', { alpha: eo(k), ls: 4 });
+}
+function sceneB(t) {
+  const u = t - T.b;
+  bg([[0, '#0a1a5e'], [.5, '#1d0b55'], [1, '#05123a']]); stars(t, .7); aurora(t + 1, .4, [[60, 200, 255], [255, 80, 200]]);
+  const proj = globe(540, 640, 340, rotAt(STOP) + u * .55, { equator: eo(p(u, .2, .8)) });
+  // Person auf dem Äquator mit Bewegungsspur
+  const lo0 = -rotAt(STOP) - u * .55 + .15, [X, Y, Z] = proj(0, lo0);
+  if (Z > 0) { const px = 540 + X * 340, py = 640 + Y * 340; g.save(); g.globalCompositeOperation = 'lighter'; glow(px, py, 70, [255, 214, 60], .8); g.restore(); g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(px, py - 30, 12, 0, 7); g.fill(); g.fillRect(px - 6, py - 18, 12, 24); arrow(px + 20, py - 10, px + 120, py - 22, [255, 214, 60], 7, eo(p(u, .6, 1.0))); }
+  const kg = p(u, .4, .9), v = 1670 * eio(p(t, ph(3) + .6, pe(3)));
+  gauge(540, 1220, 230, v, 1800, kg);
+  label('AM ÄQUATOR', 540, 160, '#ffffff', p(t, ph(3) + .1, ph(3) + .5), 72);
+}
+function label(s, x, y, col, k, size = 40) { if (k > 0) text(s, x, y, size, 'IDB', col, { alpha: eo(k), sc: lerp(1.4, 1, eback(k)), ls: 1 }); }
+
+// Gegenstände, die nach dem Stopp weiterfliegen
+function house(x, y, s, c) { g.save(); g.translate(x, y); g.scale(s, s); g.fillStyle = c; g.fillRect(-40, -40, 80, 70); g.beginPath(); g.moveTo(-52, -38); g.lineTo(0, -82); g.lineTo(52, -38); g.fill(); g.fillStyle = '#ffe9a0'; g.fillRect(-26, -22, 18, 18); g.fillRect(8, -22, 18, 18); g.fillStyle = '#5a2a1a'; g.fillRect(-10, 6, 20, 24); g.restore(); }
+function wavey(x, y, s, c) { g.save(); g.translate(x, y); g.scale(s, s); g.fillStyle = c; g.beginPath(); g.moveTo(-90, 30); for (let i = 0; i <= 18; i++) g.lineTo(-90 + i * 10, 30 - Math.sin(i / 18 * Math.PI) * 70 - (i > 12 ? (i - 12) * 6 : 0)); g.lineTo(90, 30); g.fill(); g.restore(); }
+function cloud(x, y, s) { g.save(); g.translate(x, y); g.scale(s, s); g.fillStyle = 'rgba(255,255,255,.95)'; [[-40, 0, 40], [0, -20, 50], [45, 0, 38], [10, 14, 40]].forEach(([a, b, r]) => { g.beginPath(); g.arc(a, b, r, 0, 7); g.fill(); }); g.restore(); }
+function person(x, y, s, c) { g.save(); g.translate(x, y); g.scale(s, s); g.fillStyle = c; g.beginPath(); g.arc(0, -70, 20, 0, 7); g.fill(); g.lineWidth = 16; g.lineCap = 'round'; g.strokeStyle = c; g.beginPath(); g.moveTo(0, -48); g.lineTo(0, 0); g.moveTo(0, -36); g.lineTo(-30, -60); g.moveTo(0, -36); g.lineTo(32, -56); g.moveTo(0, 0); g.lineTo(-22, 40); g.moveTo(0, 0); g.lineTo(24, 38); g.stroke(); g.restore(); }
+function sceneC(t) {
+  const u = t - T.c, stop = ph(4) + .35 - T.c;
+  bg([[0, '#3a0b5e'], [.45, '#ff5a8a'], [.6, '#ffb15a'], [1, '#2a0b30']]);
+  // Boden mit Streifen: läuft, bis er abrupt stoppt
+  const gx = u < stop ? u * 900 : stop * 900;
+  g.fillStyle = '#1a0b30'; g.fillRect(0, 1180, W, 740);
+  g.fillStyle = 'rgba(255,255,255,.12)'; for (let i = -2; i < 14; i++) g.fillRect(((i * 160 - gx) % (W + 320) + W + 320) % (W + 320) - 160, 1180, 80, 12);
+  // Objekte: vor dem Stopp fahren sie mit dem Boden, danach fliegen sie weiter
+  const items = [[ph(6), 'LUFT', (x, y, s) => cloud(x, y - 300, s * 1.4), 180], [ph(7), 'OZEANE', (x, y, s) => wavey(x, y - 20, s * 1.3, '#3fd0ff'), 420], [ph(8), 'HÄUSER', (x, y, s) => house(x, y - 30, s * 1.3, '#ff7a5a'), 660], [ph(9), 'DU', (x, y, s) => person(x, y - 30, s * 1.4, '#ffd23f'), 900]];
+  items.forEach(([tw, lab, draw, x0], i) => {
+    const drift = Math.max(0, u - stop) * 40, fly = Math.max(0, t - tw), x = x0 + drift + (fly > 0 ? fly * fly * 1400 + fly * 500 : 0), rot = fly * (i % 2 ? 2 : -1.5), y = 1180 - fly * fly * 380 * (i === 0 ? .3 : 1);
+    g.save(); g.translate(x, y); g.rotate(rot * .3);
+    if (fly > 0) { g.save(); g.globalCompositeOperation = 'lighter'; for (let s = 1; s < 6; s++) { g.globalAlpha = .12; g.translate(-28 * Math.min(1, fly * 3), 0); draw(0, 0, 1); } g.restore(); }
+    g.globalAlpha = 1; draw(0, 0, 1); g.restore();
+    const kl = p(t, tw, tw + .3);
+    if (kl > 0) text(lab, 540, 330 + i * 120, 104, 'IDB', ['#ffffff', '#3fd0ff', '#ff9a7a', '#ffd23f'][i], { alpha: clamp(kl * 3), sc: lerp(2, 1, eback(kl)), ls: -2, stroke: 10, strokeColor: '#2a0b45' });
+  });
+  if (u > stop - .02) { const k = p(u, stop, stop + .25); if (k < 1) { g.fillStyle = `rgba(255,255,255,${(1 - k) * .5})`; g.fillRect(0, 0, W, H); } }
+  label('BODEN STOPPT', 540, 180, '#ffffff', p(t, ph(4), ph(4) + .3), 84);
+}
+
+function sceneD(t) {
+  const u = t - T.d;
+  bg([[0, '#06204e'], [.5, '#0b3a6e'], [1, '#160a40']]); stars(t, .5);
+  globe(540, 700, 330, rotAt(STOP) + u * .2, { atm: [180, 230, 255] });
+  // Sturmstreifen um den Globus
+  g.save(); g.globalCompositeOperation = 'lighter';
+  const RS = rng(5);
+  for (let i = 0; i < 70; i++) {
+    const lat = (RS() - .5) * 2.2, sp = .8 + RS() * .8, ph0 = RS() * 6.283, len = .4 + RS() * .4;
+    const a = ph0 + u * 3.2 * sp, ry = 330 * Math.cos(lat) , cy = 700 - 330 * Math.sin(lat) * .95;
+    g.strokeStyle = `rgba(220,240,255,${.35 * eo(p(u, 0, .6))})`; g.lineWidth = 4; g.beginPath(); g.ellipse(540, cy, ry + 10, ry * .3, 0, a, a + len); g.stroke();
+  }
+  g.restore();
+  // Vergleich
+  const bw = 760, bx = 160;
+  [[1200, 'VERKEHRSFLUGZEUG', 900, '#7ab8ff'], [1350, 'STURM', 1670, '#ff4a5e']].forEach(([y, lab, v, c], i) => {
+    const kk = eo(p(t, ph(11) - .1 + i * .5, ph(11) + .5 + i * .5)); if (kk <= 0) return;
+    g.save(); g.globalAlpha = kk; g.fillStyle = 'rgba(255,255,255,.1)'; g.beginPath(); g.roundRect(bx, y - 28, bw, 56, 28); g.fill();
+    g.fillStyle = c; g.shadowColor = c; g.shadowBlur = 24; g.beginPath(); g.roundRect(bx, y - 28, bw * v / 1670 * kk, 56, 28); g.fill(); g.restore();
+    text(lab, bx, y - 66, 34, 'IDX', 'rgba(255,255,255,.9)', { align: 'left', alpha: kk, ls: 3 });
+    text(`~${v.toLocaleString('de-DE')} km/h`, bx + bw, y - 66, 36, 'IDX', '#ffffff', { align: 'right', alpha: kk });
+  });
+  label('STÜRME', 540, 190, '#ffffff', p(t, ph(10), ph(10) + .3), 120);
+}
+
+function sceneE(t) {
+  const u = t - T.e;
+  bg([[0, '#2a0b4e'], [.5, '#120a3a'], [1, '#04102e']]); stars(t, .8);
+  const sx = 540, sy = 860;
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(sx, sy, 380, [255, 200, 90], .9); g.restore();
+  g.fillStyle = '#fff3c8'; g.beginPath(); g.arc(sx, sy, 80, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.2)'; g.setLineDash([10, 16]); g.lineWidth = 3; g.beginPath(); g.ellipse(sx, sy, 380, 380, 0, 0, 7); g.stroke(); g.setLineDash([]);
+  // Jahres-Zeitraffer: Erde läuft einmal herum, dreht sich aber nicht
+  const yr = -.25 + .5 * eio(p(t, ph(14) - .2, ph(15))) + .5 * eio(p(t, ph(15), pe(15) + .3)), ang = Math.PI / 2 + yr * 2 * Math.PI, ex = sx + Math.cos(ang) * 380, ey = sy + Math.sin(ang) * 380;
+  const toSun = Math.atan2(sy - ey, sx - ex);
+  g.save(); g.translate(ex, ey);
+  g.fillStyle = '#0c2f7a'; g.beginPath(); g.arc(0, 0, 70, 0, 7); g.fill();
+  g.fillStyle = '#7fd4ff'; g.beginPath(); g.arc(0, 0, 70, toSun - Math.PI / 2, toSun + Math.PI / 2); g.fill();
+  // fester Ort auf der Erde (dreht sich nicht mit)
+  const mk = [0, -58], day = Math.cos(-Math.PI / 2 - toSun) > 0;
+  g.fillStyle = day ? '#ffd23f' : '#ff5ac8'; g.shadowColor = g.fillStyle; g.shadowBlur = 20; g.beginPath(); g.arc(mk[0], mk[1], 14, 0, 7); g.fill();
+  g.restore();
+  const months = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'];
+  const km = p(t, ph(14) - .3, ph(14));
+  if (km > 0) { text(months[Math.min(11, Math.floor((yr + .25) * 12))], 540, 1360, 90, 'IDB', '#ffffff', { alpha: eo(km), ls: 4 }); text(day ? 'TAG' : 'NACHT', 540, 1450, 56, 'IDX', day ? '#ffd23f' : '#ff5ac8', { alpha: eo(km), ls: 8 }); }
+  const k = p(t, ph(13), ph(13) + .4);
+  if (k > 0) text('1 TAG = 1 JAHR', 540, 230, 128, 'IDB', '#ffffff', { sc: lerp(1.8, 1, eback(k)), alpha: clamp(k * 3), ls: -3, glow: 'rgba(255,200,80,.5)', blur: 40 });
+  label('6 MONATE SONNE', 540, 350, '#ffd23f', p(t, ph(14), ph(14) + .3), 52);
+  label('6 MONATE NACHT', 540, 420, '#ff5ac8', p(t, ph(15), ph(15) + .3), 52);
+}
+
+function sceneF(t) {
+  const u = t - T.f;
+  bg([[0, '#0b2a6e'], [.5, '#1b0b55'], [1, '#04102e']]); stars(t, .7); aurora(t, .5);
+  globe(540, 1000, 330, rotAt(STOP) + u * .45);
+  const ks = p(t, ph(16) + .9, ph(16) + 1.2);
+  if (ks > 0) { g.save(); g.translate(540, 330); g.rotate(-.12); const s = lerp(2.4, 1, eback(ks)) * .84; g.scale(s, s); g.globalAlpha = clamp(ks * 3);
+    g.strokeStyle = '#ff4a5e'; g.lineWidth = 10; g.beginPath(); g.roundRect(-500, -80, 1000, 160, 18); g.stroke();
+    g.font = '74px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ff4a5e'; g.letterSpacing = '1px'; g.fillText('GEDANKENEXPERIMENT', 0, 6); g.restore(); }
+  // Schlusskarte
+  const ke = p(t, T.end, T.end + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(4,6,24,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '150px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-4px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#3fd0ff'); gr.addColorStop(.5, '#7a5cff'); gr.addColorStop(1, '#ff5ac8');
+    g.fillStyle = gr; g.globalAlpha = eo(ke); g.translate(540, 840); const s = lerp(1.25, 1, eback(ke)); g.scale(s, s);
+    g.fillText('KEINE', 0, -80); g.fillText('PANIK.', 0, 80); g.restore();
+    text('Die Erde dreht sich weiter.', 540, 1060, 50, 'IDS', '#ffffff', { alpha: eo(p(t, T.end + .3, T.end + .8)) });
+    text('Sie bremst nur um ca. 2 ms pro Jahrhundert.', 540, 1140, 36, 'IDM', 'rgba(255,255,255,.7)', { alpha: eo(p(t, T.end + .6, T.end + 1.1)) });
+  }
+}
+
+function scene(t) {
+  if (t < T.b) sceneA(t); else if (t < T.c) sceneB(t); else if (t < T.d) sceneC(t); else if (t < T.e) sceneD(t); else if (t < T.f) sceneE(t); else sceneF(t);
+}
+</script>
+</body></html>
