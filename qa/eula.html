@@ -53,12 +53,28 @@ function leg(F, len, col) {
 function soft(F, col, o) { const m = F.toon(col, o); m.flatShading = false; return m; }
 function owl(F) {
   const T = F.THREE, grp = new T.Group(), S = (r, w = 28, h = 20) => new T.SphereGeometry(r, w, h);
-  const body = F.solid(S(1.5), soft(F, 0xffa83a), .035); body.scale.set(1, 1.12, .9); grp.add(body);
-  const belly = F.solid(S(1.1), soft(F, 0xffe6b8), 0); belly.scale.set(.82, .62, .45); belly.position.set(0, -1.0, .9); grp.add(belly);
+  // Körper mit eingefärbtem ovalem Bauch (Farbe pro Ecke, dadurch weicher Rand statt aufgeklebter Fläche)
+  const BS = new T.Vector3(1, 1.12, .9), onBody = (ph, th, r = 1.5) => new T.Vector3(-r * Math.cos(ph) * Math.sin(th), r * Math.cos(th), r * Math.sin(ph) * Math.sin(th)).multiply(BS);
+  const bgeo = S(1.5, 72, 54), bp = bgeo.attributes.position, bc = new Float32Array(bp.count * 3), cO = new T.Color(0xffa83a), cB = new T.Color(0xffe6b8), cc = new T.Color();
+  for (let i = 0; i < bp.count; i++) {
+    const x = bp.getX(i), y = bp.getY(i), z = bp.getZ(i), d = Math.hypot(x / .95, (y + .62) / .82);
+    cc.copy(cO).lerp(cB, z > 0 ? clamp((1.08 - d) / .1) : 0); bc.set([cc.r, cc.g, cc.b], i * 3);
+  }
+  bgeo.setAttribute('color', new T.BufferAttribute(bc, 3));
+  const body = F.solid(bgeo, soft(F, 0xffffff, { vertexColors: true }), .035); body.scale.copy(BS); grp.add(body);
+  [[1.98, [-.3, 0, .3]], [2.22, [-.45, -.15, .15, .45]], [2.45, [-.3, 0, .3]]].forEach(([th, phs]) => phs.forEach(d => {
+    const pos = onBody(Math.PI / 2 + d, th, 1.53), fe = new T.Mesh(new T.TorusGeometry(.12, .028, 4, 10, Math.PI), new T.MeshBasicMaterial({ color: 0xe8a860 }));
+    fe.position.copy(pos); fe.lookAt(pos.clone().divide(BS).divide(BS).multiplyScalar(3)); fe.rotateZ(Math.PI); grp.add(fe);
+  }));
   [-1, 1].forEach(s => { const m = F.solid(S(.58), soft(F, 0xffe9c4), 0); m.scale.set(1, 1, .35); m.position.set(s * .55, .52, 1.02); grp.add(m); });
   const f = face(F, { eye: .38, gap: .55, ey: .55, my: -.06, mouth: .13, z: 1.18 }); grp.add(f); grp.userData.face = f;
   const beak = F.solid(new T.ConeGeometry(.17, .38, 12), soft(F, 0xff6a2a), .06); beak.rotation.x = Math.PI / 2 + .35; beak.position.set(0, .2, 1.33); grp.add(beak);
-  [-1, 1].forEach(s => { const tuft = F.solid(S(.3, 16, 12), soft(F, 0xe8862a), .06); tuft.scale.set(.7, 1.5, .6); tuft.position.set(s * 1.02, 1.42, -.05); tuft.rotation.z = -s * .5; grp.add(tuft); });
+  // Federohren: je zwei spitze Federbüschel, die schräg über der Cappie herausstehen
+  [-1, 1].forEach(s => {
+    const ear = new T.Group();
+    [[0, .95, .3, 0xe8862a], [s * .28, .65, .22, 0xffa83a]].forEach(([x, h, r, c], k) => { const fe = F.solid(new T.ConeGeometry(r, h, 14), soft(F, c), .07); fe.position.set(x, h / 2, k * .05); fe.rotation.z = -s * k * .35; ear.add(fe); });
+    ear.position.set(s * .95, 1.35, .1); ear.rotation.set(-.1, 0, -s * .62); grp.add(ear);
+  });
   // rote Cappie: Kuppel, Schirm nach vorn, Knopf oben, goldener Token als Logo
   const cap = new T.Group(), red = soft(F, 0xe8263a);
   const crown = F.solid(new T.SphereGeometry(1.05, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), red, .04); crown.scale.set(1, .78, 1); cap.add(crown);
