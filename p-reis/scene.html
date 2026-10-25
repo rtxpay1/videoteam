@@ -17,7 +17,7 @@ const END = S_[NS - 1][1] + .2;
 const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [Infinity])[0];   // Startzeit des Teilsatzes mit diesem Wort
 const BOOM = ph('Und ab jetzt');
 window.CFG = {
-  REPL: [['zehn', '10'], ['fünfhundertzwölf', '512'], ['einundzwanzig', '21'], ['zweiunddreißig', '32'], ['vier Milliarden', '4 Milliarden'], ['hundert Tonnen', '100 Tonnen'], ['vierundsechzig', '64'], ['achtzehn Trillionen', '18 Trillionen'], ['vierhundert Milliarden', '400 Milliarden'], ['fünfhundert Millionen', '500 Millionen'], ['neunhundert', '900']],
+  REPL: [['Feld zehn', 'Feld 10'], ['fünfhundertzwölf', '512'], ['einundzwanzig', '21'], ['zweiunddreißig', '32'], ['vier Milliarden', '4 Milliarden'], ['hundert Tonnen', '100 Tonnen'], ['vierundsechzig', '64'], ['achtzehn Trillionen', '18 Trillionen'], ['vierhundert Milliarden', '400 Milliarden'], ['fünfhundert Millionen', '500 Millionen'], ['neunhundert', '900']],
   DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
   KEY: /^(Schachbretts|doppelt|Reis|harmlos|Legende|König|Witz|ja|10|512|Handvoll|21|Million|Sack|32|4|Milliarden|100|Tonnen|64|explodiert|18|Trillionen|400|500|Millionen|900|verrechnet)/,
   split: t => 24 * (1 - p(t, 0, .6)) + 30 * Math.max(0, 1 - Math.abs(t - BOOM) / .3) + 20 * Math.max(0, 1 - Math.abs(t - S_[8][0]) / .3),
@@ -155,8 +155,9 @@ SC[6] = t => {   // Lkw-Kolonne: 100 Tonnen
   const u = t - S_[6][0], hu = ph('Rund hundert');
   bg([[0, '#8fd0ff'], [.7, '#cfe8ff'], [1, '#7a9a5a']]);
   g.fillStyle = '#5a7a3a'; g.fillRect(0, 1300, W, 700); g.fillStyle = '#4a4a5a'; g.fillRect(0, 1250, W, 90);
-  for (let i = 0; i < 4; i++) { const k = p(t, hu + i * .25 - .3, hu + i * .25 + .5), x = lerp(W + 300, 140 + i * 260, eo(k)); g.save(); g.translate(x, 1250); g.fillStyle = ['#ff5a8a', '#ffd23f', '#7af0ff', '#7dff6a'][i]; g.fillRect(-100, -150, 170, 130); g.fillStyle = '#2a1a40'; g.fillRect(70, -110, 60, 90); g.fillStyle = '#fff8e8'; g.beginPath(); g.ellipse(-15, -150, 85, 30, 0, Math.PI, 0); g.fill(); g.fillStyle = '#1a1030'; [-70, 30, 100].forEach(wx => { g.beginPath(); g.arc(wx, -10, 22, 0, 7); g.fill(); }); g.restore(); }
-  const n = 4.29e9 * eio(p(t, S_[6][0] + .1, at(6, .55)));
+  for (let i = 0; i < 6; i++) { const x = W + 260 - ((u * 260 + i * 330) % (W + 560)), bob = Math.abs(Math.sin(u * 9 + i)) * 4; g.save(); g.translate(x, 1250 - bob); g.fillStyle = ['#ff5a8a', '#ffd23f', '#7af0ff', '#7dff6a', '#ffb07a', '#b07aff'][i]; g.fillRect(-100, -150, 170, 130); g.fillStyle = '#2a1a40'; g.fillRect(70, -110, 60, 90); g.fillStyle = '#fff8e8'; g.beginPath(); g.ellipse(-15, -150, 85, 30, 0, Math.PI, 0); g.fill(); g.fillStyle = '#1a1030'; [-70, 30, 100].forEach(wx => { g.beginPath(); g.arc(wx, -10, 22, 0, 7); g.fill(); g.strokeStyle = '#8a8aa0'; g.lineWidth = 4; g.beginPath(); g.moveTo(wx, -10); g.lineTo(wx + Math.cos(-u * 12) * 16, -10 + Math.sin(-u * 12) * 16); g.stroke(); }); g.restore(); }
+  for (let i = 0; i < 5; i++) { const cx = ((i * 260 + u * 40) % (W + 300)) - 150; g.fillStyle = 'rgba(255,255,255,.8)'; g.beginPath(); g.ellipse(cx, 560 + i % 2 * 120, 110, 36, 0, 0, 7); g.fill(); }
+  const n = 4.29e9 * eio(p(t, S_[6][0] + .1, hu));
   big('NACH FELD 32', 280, 100, '#1a1030', kin(6, .02)(t), { sc2: 'rgba(255,255,255,.9)' });
   big(fmt(n), 420, 100, '#ff3a6a', kin(6, .1)(t), { ls: -4, sc2: 'rgba(255,255,255,.9)' });
   big('100 TONNEN', 1460, 100, '#1a1030', p(t, hu + .2, hu + .55), { sc2: 'rgba(255,255,255,.9)' });
@@ -175,7 +176,7 @@ SC[8] = t => {   // Ziffern-Slam: 18 Trillionen ausgeschrieben
   bg([[0, '#ffd23f'], [1, '#ff7a1a']]);
   const digits = '18.446.744.073.709.551.615'.split('');
   g.save(); g.font = '96px IDB'; const w = g.measureText('0').width; g.restore();
-  digits.forEach((d, i) => { const k = p(t, S_[8][0] + .1 + i * .05, S_[8][0] + .4 + i * .05); if (k <= 0) return; const row = i < 13 ? 0 : 1, col = row ? i - 13 : i, n = row ? digits.length - 13 : 13; text(d, 540 + (col - (n - 1) / 2) * w * .78, 820 + row * 140 + (1 - eback(k)) * -200, 96, 'IDB', '#2a0a00', { alpha: clamp(k * 3) }); });
+  digits.forEach((d, i) => { const k = p(t, S_[8][0] + .1 + i * .05, S_[8][0] + .4 + i * .05); if (k <= 0) return; const row = i < 11 ? 0 : 1, col = row ? i - 11 : i, n = row ? digits.length - 11 : 11; text(d, 540 + (col - (n - 1) / 2) * w * .78, 820 + row * 140 + (1 - eback(k)) * -200, 96, 'IDB', '#2a0a00', { alpha: clamp(k * 3) }); });
   big('KÖRNER', 1140, 90, '#2a0a00', kin(8, .4)(t), { sc2: 'rgba(255,255,255,.85)', ls: 6 });
   big('18 TRILLIONEN', 360, 120, '#ffffff', kin(8, .05)(t), { sc2: 'rgba(120,40,0,.9)' });
 };
