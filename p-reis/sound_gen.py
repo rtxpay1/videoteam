@@ -1,0 +1,30 @@
+# Erzeugt sound.json für das Reis-Video aus timing.json
+import json
+T = json.load(open('p-reis/timing.json')); S = T['sentences']; P = T['phrases']
+at = lambda i, f: round(S[i][0] + (S[i][1] - S[i][0]) * f, 3)
+ph = lambda w: next((x[0] for x in P if w in x[2]), None)
+ev = []; E = lambda **k: ev.append(k)
+E(t=0.0, type='riser', dd=.6, f0=200, f1=2200, gain=.18); E(t=.3, type='boom', dd=1.0, f=48, gain=.4)
+for i in range(8): E(t=round(.35 + i * (S[1][0] - .4) / 8, 3), type='tick', f=1500 + i * 120, gain=.12, pan=i / 8)
+kinds = [dict(type='whoosh', dd=.55, f0=400, f1=4500), dict(type='reverse', dd=.6), dict(type='swipe', dd=.3), dict(type='riser', dd=.5, f0=300, f1=1500), dict(type='whoosh', dd=.8, f0=150, f1=1800), dict(type='swipe', dd=.22), dict(type='reverse', dd=.45), dict(type='wind', dd=.7)]
+for i, (a, b) in enumerate(S[1:]):
+    k = dict(kinds[i % len(kinds)]); k.update(t=a, pre=.8 if k['type'] != 'wind' else .4, gain=.1, pan=.3 + .4 * (i % 2)); E(**k)
+for f in (0, .12, .24): E(t=at(1, f), type='pop', f=700 + f * 1000, gain=.18)
+E(t=ph('Aber wie viel'), type='shimmer', dd=1.0, gain=.3)
+E(t=ph('Ein Erfinder'), type='wind', dd=2.0, gain=.12)
+for i in range(3): E(t=round(S[3][0] + .2 + i * .25, 3), type='pop', f=500 + i * 150, gain=.15)
+E(t=ph('und sagte') + .3, type='boom', dd=.7, f=60, gain=.3)
+for i in range(10): E(t=round(S[4][0] + .1 + i * .15, 3), type='tick', f=2000 + i * 50, gain=.08)
+sk = ph('Ein ganzer Sack'); E(t=sk, type='boom', dd=.6, f=70, gain=.3)
+hu = ph('Rund hundert')
+for i in range(4): E(t=round(hu + i * .25, 3), type='swipe', dd=.35, gain=.12, pan=.2 + i * .2)
+B = ph('Und ab jetzt'); E(t=S[7][0], type='riser', dd=B - S[7][0], f0=200, f1=3500, gain=.14); E(t=B, type='boom', dd=1.6, f=36, gain=.5); E(t=B, type='glitch', dd=.3, gain=.14)
+for i in range(26): E(t=round(S[8][0] + .1 + i * .05, 3), type='tick', f=2400, gain=.07)
+E(t=S[9][0], type='wind', dd=S[10][0] - S[9][0], gain=.18); E(t=S[9][0] + .2, type='riser', dd=S[10][0] - S[9][0] - .3, f0=100, f1=1200, gain=.1)
+E(t=S[10][0] + .2, type='pop', f=400, gain=.18)
+ver = ph('Er hatte sich')
+for i in range(12): E(t=round(S[11][0] + .2 + i * .2, 3), type='tick', f=1800 + i * 60, gain=.08)
+E(t=ver, type='scratch', dd=.3, gain=.18); E(t=ver + .4, type='boom', dd=.8, f=50, gain=.32)
+E(t=S[11][1] + .2, type='boom', dd=1.6, f=42, gain=.4); E(t=S[11][1] + .25, type='shimmer', dd=1.6, gain=.6)
+json.dump({"dur": T['dur'], "bpm": 104, "seed": 64, "chords": [[50, 57, 62, 65], [46, 53, 58, 62], [53, 57, 60, 65], [48, 55, 60, 64], [50, 57, 62, 69], [45, 52, 57, 61]], "pattern": [0, 1, 2, 3], "pulse_from": 1.5, "pulse_to": round(S[-1][1], 2), "events": ev}, open('p-reis/sound.json', 'w'))
+print(len(ev), 'Effekte')

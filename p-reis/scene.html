@@ -1,0 +1,230 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+window.READY3D = new Promise(r => window.__ready3d = r);
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [Infinity])[0];   // Startzeit des Teilsatzes mit diesem Wort
+const BOOM = ph('Und ab jetzt');
+window.CFG = {
+  REPL: [['zehn', '10'], ['fünfhundertzwölf', '512'], ['einundzwanzig', '21'], ['zweiunddreißig', '32'], ['vier Milliarden', '4 Milliarden'], ['hundert Tonnen', '100 Tonnen'], ['vierundsechzig', '64'], ['achtzehn Trillionen', '18 Trillionen'], ['vierhundert Milliarden', '400 Milliarden'], ['fünfhundert Millionen', '500 Millionen'], ['neunhundert', '900']],
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(Schachbretts|doppelt|Reis|harmlos|Legende|König|Witz|ja|10|512|Handvoll|21|Million|Sack|32|4|Milliarden|100|Tonnen|64|explodiert|18|Trillionen|400|500|Millionen|900|verrechnet)/,
+  split: t => 24 * (1 - p(t, 0, .6)) + 30 * Math.max(0, 1 - Math.abs(t - BOOM) / .3) + 20 * Math.max(0, 1 - Math.abs(t - S_[8][0]) / .3),
+  shake: t => (t > BOOM && t < BOOM + .7 ? 18 * (1 - (t - BOOM) / .7) : 0) + (t > S_[9][0] && t < S_[10][0] ? 2 + 2 * Math.sin(t * 20) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script>
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || 'rgba(10,6,30,.85)', rot: o.rot }); }
+const kin = (i, f, d = .35) => t => p(t, at(i, f), at(i, f) + d);
+const pw = (w, d = .35, off = 0) => t => p(t, ph(w) + off, ph(w) + off + d);
+function stamp(s, x, y, size, col, k, rot = -.12) {
+  if (k <= 0) return; const e = eback(clamp(k));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(lerp(2.4, 1, e), lerp(2.4, 1, e)); g.globalAlpha = clamp(k * 3);
+  g.font = `${size}px IDB`; g.letterSpacing = '4px'; const w = g.measureText(s).width;
+  g.strokeStyle = col; g.lineWidth = 10; g.beginPath(); g.roundRect(-w / 2 - 34, -size * .72, w + 68, size * 1.44, 16); g.stroke();
+  g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, 0, 4); g.restore();
+}
+const fmt = n => Math.round(n).toLocaleString('de-DE');
+const draw3d = st => g.drawImage(FX3D.render(st), 0, 0, W, H);
+
+// ---------- 3D-Bausteine für dieses Video ----------
+let B = null, M = null, K = null;   // Bühnen: Brett, Reisberg, König
+function grainPile(T, F, n, rad, h, seed = 1) {   // Reishaufen aus vielen Körnern (InstancedMesh, ohne Kontur)
+  const geo = new T.CapsuleGeometry(.05, .12, 1, 4), mat = F.toon(0xfff8e8), mesh = new T.InstancedMesh(geo, mat, n), r = F.rng(seed), m = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler();
+  for (let i = 0; i < n; i++) {
+    const a = r() * 6.283, d = Math.sqrt(r()) * rad, y = (1 - d / rad) * h * (.6 + .4 * r());
+    e.set(r() * 3, r() * 3, r() * 3); q.setFromEuler(e); m.compose(new T.Vector3(Math.cos(a) * d, y, Math.sin(a) * d), q, new T.Vector3(1, 1, 1)); mesh.setMatrixAt(i, m);
+  }
+  return mesh;
+}
+function setup3d() {
+  const F = FX3D, T = F.THREE;
+  // Schachbrett: 8×8 Felder mit Rahmen
+  B = F.stage({ dist: 30 }); B.board = new T.Group();
+  for (let x = 0; x < 8; x++) for (let z = 0; z < 8; z++) { const f = F.solid(new T.BoxGeometry(1, .25, 1), F.toon((x + z) % 2 ? 0x3a1a6a : 0xffe2b0), .02); f.position.set(x - 3.5, 0, z - 3.5); B.board.add(f); }
+  const frame = F.solid(new T.BoxGeometry(9, .35, 9), F.toon(0x8a3a1a), .02); frame.position.y = -.12; B.board.add(frame);
+  B.add(B.board);
+  B.piles = [1, 2, 3, 4, 5, 6, 7, 8].map((k, i) => { const pl = grainPile(T, F, Math.min(600, 2 ** k), .1 + .05 * k, .05 + .06 * k, k); pl.position.set(i - 3.5, .13, -3.5); B.board.add(pl); return pl; });
+  B.sack = F.solid(new T.CylinderGeometry(.8, 1, 1.8, 7), F.toon(0xc8955a), .05); B.sack.position.set(.5, 1, 1.5); B.board.add(B.sack);
+  const tie = F.solid(new T.ConeGeometry(.45, .6, 7), F.toon(0xb07a40), .05); tie.position.y = 1.15; B.sack.add(tie);
+  // Reisberg mit Wolken
+  M = F.stage({ dist: 40 });
+  const mg = F.jitter(new T.ConeGeometry(6, 9, 9, 3), .12, 4); M.mountain = M.add(F.solid(mg, F.toon(0xfff4dc), .03)); M.mountain.position.y = -6;
+  M.peaks = [[-9, 0x8a6aa8], [9, 0x6a5aa0]].map(([x, c]) => { const pk = M.add(F.solid(F.jitter(new T.ConeGeometry(3, 5, 7, 2), .15, 9), F.toon(c), .04)); pk.position.set(x, -8, -4); return pk; });
+  M.clouds = [0, 1, 2, 3].map(i => { const c = M.add(F.solid(F.jitter(new T.IcosahedronGeometry(1.4, 1), .25, 20 + i), F.toon(0xffffff), .03)); c.scale.set(1.8, .8, 1); return c; });
+  // König mit Krone
+  K = F.stage({ dist: 26 }); K.king = K.add(F.figure(0x8a2ad0)); K.king.scale.setScalar(2.2); K.king.position.y = -4.2;
+  // Gesicht: Augen und Mund (Mund wird für die Pointe groß)
+  [-.17, .17].forEach(x => { const e = new T.Mesh(new T.SphereGeometry(.07, 8, 6), new T.MeshBasicMaterial({ color: 0x140a24 })); e.position.set(x, 2.32, .44); K.king.add(e); });
+  K.mouth = new T.Mesh(new T.SphereGeometry(.09, 10, 8), new T.MeshBasicMaterial({ color: 0x5a0a2a })); K.mouth.position.set(0, 2.1, .45); K.mouth.scale.set(1.4, .5, .5); K.king.add(K.mouth);
+  const crown = new T.Group(); crown.add(F.solid(new T.CylinderGeometry(.42, .42, .25, 8, 1, true), F.toon(0xffd23f, { emissive: 0xffa000, ei: .25 }), .06));
+  for (let i = 0; i < 5; i++) { const s = F.solid(new T.ConeGeometry(.1, .3, 4), F.toon(0xffd23f), .08); const a = i / 5 * 6.283; s.position.set(Math.cos(a) * .4, .25, Math.sin(a) * .4); crown.add(s); }
+  crown.position.y = 2.75; K.king.add(crown);
+  K.coins = [0, 1, 2, 3, 4, 5].map(i => { const c = K.add(F.solid(new T.CylinderGeometry(.5, .5, .12, 10), F.toon(0xffd23f, { emissive: 0xffa000, ei: .3 }), .06)); return c; });
+}
+// Brett-Ansicht: Kamera kreist, n Haufen sichtbar, optional Sack
+function boardShot(t, o = {}) {
+  if (!B) setup3d();
+  B.piles.forEach((pl, i) => { const k = clamp((o.piles ?? 8) - i); pl.scale.setScalar(Math.max(.001, eback(k))); });
+  B.sack.visible = !!o.sack; if (o.sack) { const k = eback(clamp(o.sackK ?? 1)); B.sack.scale.setScalar(Math.max(.001, k)); }
+  B.board.rotation.y = o.rot ?? t * .25;
+  const r = o.dist ?? 16, h = o.h ?? 11; B.cam.position.set(Math.sin(o.camA ?? t * .2) * r * .3, h, r); B.cam.lookAt(o.look?.[0] ?? 0, o.look?.[1] ?? 0, o.look?.[2] ?? 0);
+  draw3d(B);
+}
+
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+SC[0] = t => {   // Hook: 3D-Schachbrett kreist, Reishaufen poppen Feld für Feld auf
+  bg([[0, '#ff8a3a'], [.5, '#ff3a6a'], [1, '#3a0a6a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 20; i++) { const a = i / 20 * 6.283 + t * .4; g.fillStyle = `rgba(255,255,255,${i % 2 ? .04 : .08})`; g.beginPath(); g.moveTo(540, 1000); g.lineTo(540 + Math.cos(a) * 1900, 1000 + Math.sin(a) * 1900); g.lineTo(540 + Math.cos(a + .12) * 1900, 1000 + Math.sin(a + .12) * 1900); g.fill(); } g.restore();
+  boardShot(t, { piles: p(t, .3, S_[1][0]) * 8, dist: lerp(11, 15, eo(p(t, 0, S_[1][0]))), h: 9, rot: -.6 + t * .35, look: [0, 0, 1.5] });
+  big('WAS WÄRE, WENN', 260, 96, '#ffffff', p(t, .2, .55));
+  big('JEDES FELD ×2', 1420, 110, '#ffd23f', p(t, at(0, .5), at(0, .5) + .3), { glow: 'rgba(255,210,60,.7)' });
+};
+SC[1] = t => {   // Kinetische Zahlen 1 → 2 → 4 → ?
+  const u = t - S_[1][0], q = ph('Aber wie viel');
+  bg([[0, '#2a0a6a'], [1, '#0a0420']]); stars(t, .5);
+  [['1', .0, 220], ['2', .12, 440], ['4', .24, 660]].forEach(([s, f, x]) => { const k = kin(1, f)(t); big(s, 820 + Math.sin(u * 3 + x) * 14, 220, '#ffd23f', k, { x, glow: 'rgba(255,210,60,.6)' }); for (let i = 0; i < +s; i++) { const a = popIn(p(t, at(1, f) + .2 + i * .06, at(1, f) + .5 + i * .06)); if (a > 0) { g.save(); g.translate(x - 30 + (i % 2) * 60, 1010 + Math.floor(i / 2) * 50); g.rotate(i + u); g.scale(a, a); g.fillStyle = '#fff8e8'; g.beginPath(); g.ellipse(0, 0, 22, 10, 0, 0, 7); g.fill(); g.restore(); } } });
+  big('?', 820, 300, '#ff5ac8', p(t, q, q + .35), { x: 880, glow: 'rgba(255,90,200,.7)' });
+  big('KLINGT HARMLOS', 330, 96, '#ffffff', kin(1, .4)(t), { alpha: 1 - p(t, q - .1, q) });
+  big('WIE VIEL AM ENDE?', 330, 92, '#7af0ff', p(t, q, q + .35));
+};
+SC[2] = t => {   // Legende als Papier-Scherenschnitt mit Parallax
+  const u = t - S_[2][0], inv = ph('Ein Erfinder');
+  bg([[0, '#ffcf7a'], [1, '#d0703a']]);
+  parallax([
+    { depth: .3, draw: o => { g.fillStyle = '#e8a050'; for (let i = 0; i < 6; i++) { const x = ((i * 240 - o) % (W + 300) + W + 300) % (W + 300) - 150; g.beginPath(); g.moveTo(x - 160, 1500); g.lineTo(x, 1100 - (i % 3) * 60); g.lineTo(x + 160, 1500); g.fill(); } } },
+    { depth: 1, draw: o => { g.fillStyle = '#5a1a2a'; g.fillRect(-50, 1350, W + 100, 600); // Palast
+      g.save(); g.translate(-o * .3, 0); for (let i = 0; i < 3; i++) { const x = 160 + i * 380; g.fillRect(x, 980, 160, 380); g.beginPath(); g.arc(x + 80, 980, 80, Math.PI, 0); g.fill(); g.beginPath(); g.moveTo(x + 80, 840); g.lineTo(x + 60, 900); g.lineTo(x + 100, 900); g.fill(); } g.restore(); } },
+  ], u * 40);
+  // zwei Figuren als Scherenschnitt: Erfinder verbeugt sich vor dem König
+  const bow = Math.max(0, Math.sin((t - inv) * 3)) * p(t, inv, inv + .3);
+  g.save(); g.fillStyle = '#2a0a1a'; g.translate(330, 1350); g.rotate(-bow * .35); g.fillRect(-28, -180, 56, 180); g.beginPath(); g.arc(0, -215, 38, 0, 7); g.fill(); g.restore();
+  g.save(); g.fillStyle = '#2a0a1a'; g.translate(760, 1350); g.fillRect(-40, -220, 80, 220); g.beginPath(); g.arc(0, -262, 44, 0, 7); g.fill(); g.fillStyle = '#ffd23f'; g.beginPath(); g.moveTo(-40, -300); for (let i = 0; i < 5; i++) { g.lineTo(-40 + i * 20 + 10, -350); g.lineTo(-40 + i * 20 + 20, -300); } g.fill(); g.restore();
+  big('EINE LEGENDE', 300, 110, '#3a0a1a', kin(2, .02)(t), { sc2: 'rgba(255,240,210,.9)' });
+  text('„Gib mir Reis, Feld für Feld verdoppelt.“', 540, 460, 50, 'IDX', '#3a0a1a', { alpha: eo(p(t, inv + .5, inv + 1)) });
+};
+SC[3] = t => {   // 3D-König lacht, Münzen fliegen, Stempel „JA!“
+  if (!K) setup3d();
+  const u = t - S_[3][0], ja = ph('und sagte');
+  bg([[0, '#7a2aff'], [1, '#2a0a5a']]); aurora(t, .6);
+  const laugh = Math.abs(Math.sin(u * 9)) * p(t, S_[3][0], ja + .5);
+  K.king.rotation.set(-laugh * .15, Math.sin(u * 1.5) * .5, Math.sin(u * 9) * .05 * laugh); K.king.position.y = -3.4 + laugh * .3;
+  K.coins.forEach((c, i) => { const a = i * 1.05 + u * .9; c.position.set(Math.cos(a) * 3.2, -1 + Math.sin(u * 2 + i) * 1.5, Math.sin(a) * 2); c.rotation.set(u * 3 + i, u * 2, 0); });
+  K.mouth.scale.set(1.6, .4 + laugh * 1.2, .5);
+  K.cam.position.set(Math.sin(u * .5) * 3, 1 + u * .2, 26 - u * .6); K.cam.lookAt(0, -.5, 0);
+  draw3d(K);
+  ['HA', 'HA', 'HA'].forEach((s, i) => big(s, 480 + i * 120, 90, '#ffd23f', p(t, S_[3][0] + .2 + i * .25, S_[3][0] + .5 + i * .25), { x: 250 + i * 290, rot: (i - 1) * .2 }));
+  stamp('JA!', 540, 1420, 120, '#7dff6a', p(t, ja + .3, ja + .6), -.08);
+};
+SC[4] = t => {   // 3D-Brett nah: Feld 10 = Handvoll
+  const u = t - S_[4][0], hv = ph('Eine Handvoll');
+  bg([[0, '#0a5a6a'], [1, '#02202a']]);
+  boardShot(t, { piles: 8, dist: 9, h: 6, rot: -.3 + u * .12, look: [0, 0, -2] });
+  const n = Math.round(512 * eio(p(t, S_[4][0] + .1, at(4, .6))));
+  big('FELD 10', 280, 110, '#ffffff', kin(4, .02)(t));
+  big(fmt(n) + ' KÖRNER', 420, 92, '#ffd23f', kin(4, .1)(t), { glow: 'rgba(255,210,60,.6)' });
+  big('EINE HANDVOLL', 1440, 90, '#7af0ff', p(t, hv, hv + .35));
+};
+SC[5] = t => {   // 3D-Sack plumpst aufs Brett
+  const u = t - S_[5][0], sk = ph('Ein ganzer Sack');
+  bg([[0, '#3a1a7a'], [1, '#100830']]); stars(t, .4);
+  boardShot(t, { piles: 8, sack: true, sackK: p(t, sk - .2, sk + .3), dist: 13, h: 8, rot: .4 + u * .15, look: [0, .5, 0] });
+  const n = Math.round(1048576 * eio(p(t, S_[5][0] + .1, at(5, .5))));
+  big('FELD 21', 280, 110, '#ffffff', kin(5, .02)(t));
+  big(fmt(n), 420, 110, '#ffd23f', kin(5, .1)(t), { glow: 'rgba(255,210,60,.6)', ls: -4 });
+  big('EIN GANZER SACK', 1440, 84, '#ffb07a', p(t, sk + .2, sk + .55));
+};
+SC[6] = t => {   // Lkw-Kolonne: 100 Tonnen
+  const u = t - S_[6][0], hu = ph('Rund hundert');
+  bg([[0, '#8fd0ff'], [.7, '#cfe8ff'], [1, '#7a9a5a']]);
+  g.fillStyle = '#5a7a3a'; g.fillRect(0, 1300, W, 700); g.fillStyle = '#4a4a5a'; g.fillRect(0, 1250, W, 90);
+  for (let i = 0; i < 4; i++) { const k = p(t, hu + i * .25 - .3, hu + i * .25 + .5), x = lerp(W + 300, 140 + i * 260, eo(k)); g.save(); g.translate(x, 1250); g.fillStyle = ['#ff5a8a', '#ffd23f', '#7af0ff', '#7dff6a'][i]; g.fillRect(-100, -150, 170, 130); g.fillStyle = '#2a1a40'; g.fillRect(70, -110, 60, 90); g.fillStyle = '#fff8e8'; g.beginPath(); g.ellipse(-15, -150, 85, 30, 0, Math.PI, 0); g.fill(); g.fillStyle = '#1a1030'; [-70, 30, 100].forEach(wx => { g.beginPath(); g.arc(wx, -10, 22, 0, 7); g.fill(); }); g.restore(); }
+  const n = 4.29e9 * eio(p(t, S_[6][0] + .1, at(6, .55)));
+  big('NACH FELD 32', 280, 100, '#1a1030', kin(6, .02)(t), { sc2: 'rgba(255,255,255,.9)' });
+  big(fmt(n), 420, 100, '#ff3a6a', kin(6, .1)(t), { ls: -4, sc2: 'rgba(255,255,255,.9)' });
+  big('100 TONNEN', 1460, 100, '#1a1030', p(t, hu + .2, hu + .55), { sc2: 'rgba(255,255,255,.9)' });
+};
+SC[7] = t => {   // Explosion: Warp und Kurve
+  const u = t - S_[7][0], k = p(t, BOOM, S_[8][0]);
+  bg([[0, '#1a0040'], [1, '#000010']]);
+  warp(u, .6 + k * 3, 1);
+  if (t > BOOM) { const f = 1 - p(t, BOOM, BOOM + .35); g.fillStyle = `rgba(255,240,220,${f})`; g.fillRect(0, 0, W, H); burst(t, BOOM, 540, 960, { scale: 1.2, col: [255, 248, 230] }); }
+  big('64 FELDER', 420, 140, '#ffffff', kin(7, .02)(t), { glow: 'rgba(200,160,255,.6)' });
+  big('×2', 600, 110, '#7af0ff', kin(7, .3)(t));
+  big('ES EXPLODIERT', 1440, 100, '#ff5a8a', p(t, BOOM + .1, BOOM + .45), { glow: 'rgba(255,90,140,.7)' });
+};
+SC[8] = t => {   // Ziffern-Slam: 18 Trillionen ausgeschrieben
+  const u = t - S_[8][0];
+  bg([[0, '#ffd23f'], [1, '#ff7a1a']]);
+  const digits = '18.446.744.073.709.551.615'.split('');
+  g.save(); g.font = '96px IDB'; const w = g.measureText('0').width; g.restore();
+  digits.forEach((d, i) => { const k = p(t, S_[8][0] + .1 + i * .05, S_[8][0] + .4 + i * .05); if (k <= 0) return; const row = i < 13 ? 0 : 1, col = row ? i - 13 : i, n = row ? digits.length - 13 : 13; text(d, 540 + (col - (n - 1) / 2) * w * .78, 820 + row * 140 + (1 - eback(k)) * -200, 96, 'IDB', '#2a0a00', { alpha: clamp(k * 3) }); });
+  big('KÖRNER', 1140, 90, '#2a0a00', kin(8, .4)(t), { sc2: 'rgba(255,255,255,.85)', ls: 6 });
+  big('18 TRILLIONEN', 360, 120, '#ffffff', kin(8, .05)(t), { sc2: 'rgba(120,40,0,.9)' });
+};
+SC[9] = t => {   // 3D-Reisberg wächst durch die Wolken
+  if (!M) setup3d();
+  const u = t - S_[9][0], k = eio(p(t, S_[9][0], S_[10][0] - .2));
+  bg([[0, '#1a5aff'], [.6, '#7ac0ff'], [1, '#ffe0c0']]);
+  M.mountain.scale.set(.4 + k * 1.2, .2 + k * 2.4, .4 + k * 1.2); M.mountain.position.y = -9 + k * 2; M.mountain.rotation.y = u * .3;
+  M.peaks.forEach((pk, i) => pk.rotation.y = u * .2 + i);
+  M.clouds.forEach((c, i) => { c.position.set(((i * 7 + u * 2) % 28) - 14, 2 + (i % 2) * 3, 3 - i); c.rotation.y = u * .3; });
+  M.cam.position.set(Math.sin(u * .4) * 6, -2 + k * 6, 40); M.cam.lookAt(0, -2 + k * 6, 0);
+  draw3d(M);
+  big('400 MILLIARDEN', 280, 110, '#ffffff', kin(9, .1)(t), { sc2: 'rgba(20,40,120,.85)' });
+  big('TONNEN REIS', 410, 100, '#ffd23f', kin(9, .3)(t), { sc2: 'rgba(20,40,120,.85)' });
+};
+SC[10] = t => {   // Ernte-Balken: ein Jahr Welternte ist winzig
+  const u = t - S_[10][0], k = p(t, S_[10][0] + .2, S_[10][0] + 1.4);
+  bg([[0, '#0a3a1a'], [1, '#02140a']]);
+  g.save(); g.globalAlpha = .2; g.strokeStyle = '#fff'; g.lineWidth = 2; for (let y = 560; y <= 1300; y += 120) { g.beginPath(); g.moveTo(140, y); g.lineTo(940, y); g.stroke(); } g.restore();
+  bars([{ v: 1, c: [255, 210, 60], label: 'BRETT' }, { v: .02, c: [120, 255, 120], label: '1 JAHR' }], k, 140, 1300, 800, 760, { size: 50 });
+  big('DIE GANZE WELT', 280, 100, '#ffffff', kin(10, .02)(t));
+  big('500 MIO. T / JAHR', 410, 84, '#7dff6a', kin(10, .4)(t));
+  text('Weltreisernte', 718, 1440, 44, 'IDX', 'rgba(255,255,255,.8)', { alpha: eo(k) });
+};
+SC[11] = t => {   // Pointe: 3D-König schaut entsetzt, Jahreszähler rast bis 900
+  if (!K) setup3d();
+  const u = t - S_[11][0], ver = ph('Er hatte sich'), n = Math.round(900 * eio(p(t, S_[11][0] + .2, ver)));
+  bg([[0, '#ff3a6a'], [1, '#3a0a5a']]); aurora(t, .5, [[255, 200, 60], [255, 90, 200], [120, 90, 255]]);
+  const shock = p(t, ver, ver + .4);
+  K.king.rotation.set(shock * .25, Math.sin(u * .8) * .3, Math.sin(u * 12) * .04 * shock); K.king.position.y = -3.4 - shock * .2;
+  K.coins.forEach((c, i) => { c.position.set((i - 2.5) * 1.3, 6 - ((u * 4 + i * 1.3) % 12), 1); c.rotation.set(u * 4 + i, u * 3, 0); });
+  K.mouth.scale.set(1 + shock * .2, .5 + shock * 1.6, .5);
+  K.cam.position.set(Math.sin(u * .4) * 2, 2 - u * .2, 24 - u * .5); K.cam.lookAt(0, -.5, 0);
+  draw3d(K);
+  big(n + ' JAHRE', 300, 140, '#ffffff', kin(11, .05)(t), { glow: 'rgba(255,255,255,.5)', ls: -4 });
+  big('VERRECHNET.', 1440, 110, '#ffd23f', p(t, ver + .4, ver + .75), { glow: 'rgba(255,210,60,.6)' });
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(30,6,40,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '120px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-4px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#fff8e8'); gr.addColorStop(.5, '#ffd23f'); gr.addColorStop(1, '#ff5a8a');
+    g.fillStyle = gr; g.translate(540, 860); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('EIN KORN.', 0, -75); g.fillText('900 JAHRE.', 0, 75); g.restore();
+    text('Unterschätz nie das Verdoppeln.', 540, 1080, 48, 'IDS', '#ffffff', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+};
+function scene(t) {
+  let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
+  SC[i](t);
+}
+</script>
+</body></html>
