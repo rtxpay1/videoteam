@@ -21,20 +21,28 @@ let FIG = null;
 // Gesicht: zwei Augen mit Glanzpunkt und ein Mund, der zwischen Lächeln und offenem Staunen wechselt
 function face(F, o) {
   const T = F.THREE, grp = new T.Group(), black = new T.MeshBasicMaterial({ color: 0x140a24 }), white = new T.MeshBasicMaterial({ color: 0xffffff });
+  const disc = (r, c, z, x = 0, y = 0) => { const m = new T.Mesh(new T.CircleGeometry(r, 32), new T.MeshBasicMaterial({ color: c })); m.position.set(x, y, z); return m; };
+  // Auge: Augapfel mit Kontur, goldene Iris, Pupille, zwei Glanzpunkte, Lid zum Blinzeln
   const eyes = [-1, 1].map(s => {
-    const e = new T.Group();
-    const w = new T.Mesh(new T.SphereGeometry(o.eye, 12, 8), white); w.scale.set(1, 1.25, .45); e.add(w);
-    const pu = new T.Mesh(new T.SphereGeometry(o.eye * .55, 10, 6), black); pu.scale.set(1, 1.2, .5); pu.position.set(0, -o.eye * .12, o.eye * .3); e.add(pu);
-    const hl = new T.Mesh(new T.SphereGeometry(o.eye * .18, 6, 4), white); hl.position.set(o.eye * .2, o.eye * .25, o.eye * .55); e.add(hl);
-    e.position.set(s * o.gap, o.ey, o.z); grp.add(e); return e;
+    const e = new T.Group(), r = o.eye, front = r * .62;
+    const w = F.solid(new T.SphereGeometry(r, 32, 20), white, .13); w.scale.set(1, 1.08, .62); e.add(w);
+    const look = new T.Group(); look.position.set(-s * r * .06, -r * .04, 0); e.add(look);
+    look.add(disc(r * .62, 0xc87a10, front + .004), disc(r * .55, 0xffb81a, front + .006), disc(r * .33, 0x140a24, front + .008));
+    look.add(disc(r * .15, 0xffffff, front + .01, r * .2, r * .2), disc(r * .07, 0xffffff, front + .01, -r * .16, -r * .17));
+    const lid = new T.Mesh(new T.SphereGeometry(r * 1.16, 28, 16), new T.MeshBasicMaterial({ color: 0xf09a30 })); lid.visible = false; e.add(lid);
+    const lash = new T.Mesh(new T.TorusGeometry(r * .75, r * .07, 6, 20, Math.PI), black); lash.rotation.z = Math.PI; lash.position.set(0, r * .1, r * .8); lash.visible = false; e.add(lash);
+    e.userData = { look, lid, lash, r };
+    e.position.set(s * o.gap, o.ey, o.z); e.rotation.y = s * .12; grp.add(e); return e;
   });
   const smile = new T.Mesh(new T.TorusGeometry(o.mouth, o.mouth * .22, 6, 12, Math.PI), black); smile.rotation.z = Math.PI; smile.position.set(0, o.my, o.z); grp.add(smile);
   const open = new T.Mesh(new T.SphereGeometry(o.mouth * .8, 10, 8), new T.MeshBasicMaterial({ color: 0x5a0a20 })); open.scale.set(.9, 1.2, .3); open.position.set(0, o.my - o.mouth * .3, o.z); grp.add(open);
-  const cheeks = [-1, 1].map(s => { const c = new T.Mesh(new T.CircleGeometry(o.eye * .55, 10), new T.MeshBasicMaterial({ color: 0xff7aa0, transparent: true, opacity: .7 })); c.position.set(s * o.gap * 1.45, o.my + o.mouth * .2, o.z - .02); grp.add(c); return c; });
+  const cheeks = [-1, 1].map(s => { const c = new T.Mesh(new T.CircleGeometry(o.eye * .42, 20), new T.MeshBasicMaterial({ color: 0xff7aa0, transparent: true, opacity: .75 })); c.position.set(s * o.gap * 1.5, o.ey - o.eye * 1.15, o.z - .1); c.rotation.y = s * .45; grp.add(c); return c; });
   grp.userData = { eyes, smile, open, cheeks };
   return grp;
 }
-function setMood(f, wow) { const u = f.userData; u.smile.visible = !wow; u.open.visible = wow; u.eyes.forEach(e => e.scale.setScalar(wow ? 1.25 : 1)); }
+// Lid: k = 0 offen, 1 zu (wächst von oben herab)
+function blink(f, k) { f.userData.eyes.forEach(e => { const { lid, lash, r } = e.userData; lid.visible = k > .02; lash.visible = k > .85; lid.scale.set(1, Math.max(k, .02) * 1.08, .7); lid.position.y = r * 1.2 * (1 - k); }); }
+function setMood(f, wow) { const u = f.userData; u.smile.visible = !wow; u.open.visible = wow; u.eyes.forEach(e => e.scale.setScalar(wow ? 1.18 : 1)); }
 // Gummiarm mit weißem Handschuh
 function arm(F, len, col) {
   const T = F.THREE, grp = new T.Group();
@@ -55,10 +63,10 @@ function owl(F) {
   const T = F.THREE, grp = new T.Group(), S = (r, w = 28, h = 20) => new T.SphereGeometry(r, w, h);
   // Körper mit eingefärbtem ovalem Bauch (Farbe pro Ecke, dadurch weicher Rand statt aufgeklebter Fläche)
   const BS = new T.Vector3(1, 1.12, .9), onBody = (ph, th, r = 1.5) => new T.Vector3(-r * Math.cos(ph) * Math.sin(th), r * Math.cos(th), r * Math.sin(ph) * Math.sin(th)).multiply(BS);
-  const bgeo = S(1.5, 72, 54), bp = bgeo.attributes.position, bc = new Float32Array(bp.count * 3), cO = new T.Color(0xffa83a), cB = new T.Color(0xffe6b8), cc = new T.Color();
+  const bgeo = S(1.5, 128, 96), bp = bgeo.attributes.position, bc = new Float32Array(bp.count * 3), cO = new T.Color(0xffa83a), cB = new T.Color(0xffe6b8), cF = new T.Color(0xffe2b4), cc = new T.Color();
   for (let i = 0; i < bp.count; i++) {
-    const x = bp.getX(i), y = bp.getY(i), z = bp.getZ(i), d = Math.hypot(x / .95, (y + .62) / .82);
-    cc.copy(cO).lerp(cB, z > 0 ? clamp((1.08 - d) / .1) : 0); bc.set([cc.r, cc.g, cc.b], i * 3);
+    const x = bp.getX(i), y = bp.getY(i), z = bp.getZ(i), d = Math.hypot(x / .95, (y + .62) / .82), dE = Math.min(Math.hypot(x - .55, y - .49), Math.hypot(x + .55, y - .49));
+    cc.copy(cO).lerp(cB, z > 0 ? clamp((1.08 - d) / .1) : 0); if (z > 0) cc.lerp(cF, clamp((.6 - dE) / .14)); bc.set([cc.r, cc.g, cc.b], i * 3);
   }
   bgeo.setAttribute('color', new T.BufferAttribute(bc, 3));
   const body = F.solid(bgeo, soft(F, 0xffffff, { vertexColors: true }), .035); body.scale.copy(BS); grp.add(body);
@@ -66,8 +74,7 @@ function owl(F) {
     const pos = onBody(Math.PI / 2 + d, th, 1.53), fe = new T.Mesh(new T.TorusGeometry(.12, .028, 4, 10, Math.PI), new T.MeshBasicMaterial({ color: 0xe8a860 }));
     fe.position.copy(pos); fe.lookAt(pos.clone().divide(BS).divide(BS).multiplyScalar(3)); fe.rotateZ(Math.PI); grp.add(fe);
   }));
-  [-1, 1].forEach(s => { const m = F.solid(S(.58), soft(F, 0xffe9c4), 0); m.scale.set(1, 1, .35); m.position.set(s * .55, .52, 1.02); grp.add(m); });
-  const f = face(F, { eye: .38, gap: .55, ey: .55, my: -.06, mouth: .13, z: 1.18 }); grp.add(f); grp.userData.face = f;
+  const f = face(F, { eye: .4, gap: .55, ey: .55, my: -.06, mouth: .13, z: 1.12 }); grp.add(f); grp.userData.face = f;
   const beak = F.solid(new T.ConeGeometry(.17, .38, 12), soft(F, 0xff6a2a), .06); beak.rotation.x = Math.PI / 2 + .35; beak.position.set(0, .2, 1.33); grp.add(beak);
   // Federohren: je zwei spitze Federbüschel, die schräg über der Cappie herausstehen
   [-1, 1].forEach(s => {
@@ -99,7 +106,7 @@ function scene(t) {
   if (!FIG) setup();
   const i = Math.min(2, Math.floor(t / 2)), wow = i === 1, st = FIG[i], f = st.fig, d = f.userData;
   bg(BGS[i]); stars(t, .5); aurora(t, .4);
-  setMood(d.face, wow);
+  setMood(d.face, wow); blink(d.face, Math.max(0, 1 - Math.abs(t - 1.2) / .12, 1 - Math.abs(t - 4.6) / .12));
   f.rotation.set(0, i === 2 ? -1.1 + (t - 4) * .9 : wow ? Math.sin(t * 3) * .1 : -.4 + Math.sin(t * 2) * .1, wow ? Math.sin(t * 9) * .04 : 0);
   f.position.set(0, -.6 + Math.abs(Math.sin(t * 4)) * (wow ? .5 : .15), 0);
   const [al, ar] = d.arms;
