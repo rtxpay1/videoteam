@@ -23,8 +23,9 @@ lines = [re.sub(r'^\[[+\-=]\]\s*', '', l.strip()) for l in open(os.path.join(d, 
 parts, t, sentences, phrases = [], LEAD, [], []
 for i, line in enumerate(lines, 1):
     src, out = os.path.join(d, 'v', f's{i}.wav'), os.path.join(d, 'v', f't{i}.wav')
+    # Ende sanft: leise Endlaute (s, t, f, n) bleiben stehen (-58 dB, 0,14 s Rest), dann kurzes Ausblenden statt hartem Schnitt
     run('ffmpeg', '-y', '-loglevel', 'error', '-i', src, '-af',
-        f'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.02,areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,atempo={TEMPO}{EXTRA}',
+        f'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.02,areverse,silenceremove=start_periods=1:start_threshold=-58dB:start_silence=0.14,afade=t=in:d=0.04,areverse,atempo={TEMPO}{EXTRA}',
         '-ar', '24000', out)
     L = dur(out)
     ps = [(a, b) for a, b in pauses(out) if a > 0.15 and b < L - 0.1]

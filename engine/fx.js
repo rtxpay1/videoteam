@@ -142,3 +142,39 @@ function bars(data, k, x, y, w, h, o = {}) {   // data: [{v (0..1), c, label}]
 function parallax(layers, travel) {   // layers: [{depth, draw(offset)}], weiter hinten = kleineres depth
   layers.forEach(L => { g.save(); g.translate(0, 0); L.draw(travel * L.depth); g.restore(); });
 }
+
+// ---------- Aufrufe an die Zuschauer ----------
+// Abo-Knopf: ploppt ab t0 auf, wird bei t0+tap (Eula tippt/zeigt drauf) gedrückt, wechselt auf „ABONNIERT ✓“, Glocke klingelt.
+// Dauer ca. 2,8 s. Platz: im sicheren Bereich über den Untertiteln (y ≤ 1300), neben Eula, damit sie darauf zeigen kann.
+//   subscribeCTA(t, ph('abonnier'), 540, 1180)
+function subscribeCTA(t, t0, x, y, o = {}) {
+  const k = t - t0, tap = o.tap ?? .9, end = o.dur ?? 2.8;
+  if (k < 0 || k > end) return;
+  const inK = popIn(k / .35), outK = clamp((end - k) / .3), press = k > tap && k < tap + .18 ? 1 - Math.sin((k - tap) / .18 * Math.PI) * .12 : 1;
+  const done = k >= tap + .09, sc = inK * press * (o.scale || 1), w = 600, h = 120;
+  g.save(); g.globalAlpha *= outK; g.translate(x, y); g.scale(sc, sc);
+  g.shadowColor = done ? 'rgba(0,0,0,.4)' : 'rgba(255,40,60,.8)'; g.shadowBlur = done ? 20 : 50 + Math.sin(k * 12) * 15;
+  g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, h / 2); g.fillStyle = done ? '#3a3a44' : '#ff1e3c'; g.fill();
+  g.shadowBlur = 0; g.lineWidth = 6; g.strokeStyle = 'rgba(255,255,255,.9)'; g.stroke();
+  text(done ? 'ABONNIERT ✓' : 'ABONNIEREN', 42, 4, 56, 'IDB', '#fff', { ls: 1 });
+  // Glocke links im Knopf, schwingt nach dem Drücken
+  const sw = done ? Math.sin((k - tap) * 22) * Math.exp(-(k - tap) * 2.5) * .5 : 0;
+  g.save(); g.translate(-w / 2 + 70, 0); g.rotate(sw); g.fillStyle = '#ffd23f';
+  g.beginPath(); g.moveTo(-26, 22); g.quadraticCurveTo(-26, -30, 0, -32); g.quadraticCurveTo(26, -30, 26, 22); g.closePath(); g.fill();
+  g.beginPath(); g.arc(0, 30, 8, 0, 7); g.fill(); g.restore();
+  g.restore();
+  if (done) burst(t, t0 + tap + .05, x - (w / 2 - 70) * sc, y, { n: 40, scale: .5 });
+}
+// Kommentar-Aufruf: Sprechblase mit drei Punkten ploppt neben Eula auf und wippt (ca. 2,5 s). Die Frage selbst sagt die Stimme.
+//   commentCTA(t, ph('Schreib'), 760, 1050)
+function commentCTA(t, t0, x, y, o = {}) {
+  const k = t - t0, end = o.dur ?? 2.5;
+  if (k < 0 || k > end) return;
+  const sc = popIn(k / .35) * clamp((end - k) / .3) * (o.scale || 1), bob = Math.sin(k * 6) * 8;
+  g.save(); g.translate(x, y + bob); g.scale(sc, sc);
+  g.shadowColor = 'rgba(54,232,255,.7)'; g.shadowBlur = 40;
+  g.beginPath(); g.roundRect(-150, -95, 300, 170, 60); g.moveTo(-60, 70); g.lineTo(-110, 130); g.lineTo(-10, 74); g.fillStyle = '#fff'; g.fill();
+  g.shadowBlur = 0;
+  for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(-70 + i * 70, -10 - Math.max(0, Math.sin(k * 8 - i)) * 14, 18, 0, 7); g.fillStyle = '#2a7bff'; g.fill(); }
+  g.restore();
+}

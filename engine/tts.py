@@ -33,6 +33,13 @@ NUM = re.compile(r'(null|eins|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|e
 words = lambda s: re.findall(r'[a-zäöüß]+', s.lower())
 # Whisper schreibt Einheiten abgekürzt; vor dem Vergleich wieder ausschreiben
 UNITS = [(r'\bcm\b', 'zentimeter'), (r'\bkm\b', 'kilometer'), (r'\bm\b', 'meter'), (r'°\s*c\b', 'grad'), (r'°', 'grad'), (r'%', 'prozent'), (r'\bkg\b', 'kilogramm')]
+def cut_off(wav, sr):
+    # bricht die Aufnahme mitten im Laut ab? (letzte 30 ms fast so laut wie der Satz)
+    x = wav[0]; n = int(.03 * sr)
+    if x.shape[-1] < 4 * n: return False
+    last = float(x[-n:].pow(2).mean().sqrt()); ref = float(x.pow(2).mean().sqrt()) + 1e-9
+    return last > ref * .35
+
 def score(text, heard):
     want = [w for w in words(text) if len(w) > 2 and not NUM.search(w)]
     heard = heard.lower()
@@ -66,9 +73,14 @@ for i, raw in enumerate([l.strip() for l in sys.stdin if l.strip()], 1):
         heard = ' '.join(s.text for s in asr.transcribe(pcm, language='de', beam_size=1)[0])
         # Abzug, wenn der Satz viel zu lang ist oder die Stimme Wörter dazuerfindet
         extra = len(words(heard)) - len(words(text))
-        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(2, len(words(text)) * .2) else 0)
+        # Abzug, wenn die Endung fehlt: letztes Wort nicht gehört oder Aufnahme bricht mitten im Laut ab
+        lastw = [w for w in words(text) if len(w) > 2][-1:] or words(text)[-1:]
+        miss_end = bool(lastw) and not difflib.get_close_matches(lastw[0], words(heard)[-4:], n=1, cutoff=.7)
+        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(2, len(words(text)) * .2) else 0) - (.25 if miss_end or cut_off(wav, model.sr) else 0)
+        if miss_end or cut_off(wav, model.sr): print(f'  s{i} Versuch {k + 1}: Endung abgeschnitten', flush=True)
         if best is None or sc > best[0] or (sc == best[0] and wav.shape[-1] < best[1].shape[-1]): best = (sc, wav, heard)   # gleich gut: kürzer gewinnt
         if sc >= .85: break
         print(f'  s{i} Versuch {k + 1}: {sc:.2f} gehört: {heard.strip()}', flush=True)
-    torchaudio.save(os.path.join(out, f's{i}.wav'), best[1], model.sr)
+    w = best[1].clone(); f = int(.03 * model.sr); w[..., -f:] *= torch.linspace(1, 0, f)
+    torchaudio.save(os.path.join(out, f's{i}.wav'), w, model.sr)
     print(f's{i}.wav', round(best[1].shape[-1] / model.sr, 2), f'Prüfung {best[0]:.2f}' if asr else '', flush=True)

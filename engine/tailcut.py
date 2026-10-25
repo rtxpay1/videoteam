@@ -15,9 +15,15 @@ def cut(asr, wav, sr, text):
     # letztes gehörtes Wort, das zu einem der letzten beiden Skriptwörter passt
     hit = max((k for k, w in enumerate(ws) if difflib.get_close_matches(norm(w.word), last, n=1, cutoff=.7)), default=None)
     if hit is None or hit == len(ws) - 1: return wav, 0.0
-    end = ws[hit].end + .18
     if ws[hit + 1].start < ws[hit].end + .15: return wav, 0.0   # direkt angehängt: vermutlich doch Teil des Satzes
-    n = min(wav.shape[-1], int(end * sr)); fade = int(.04 * sr)
+    # Whisper setzt Wortenden oft zu früh: erst in der ersten echten Stille nach dem Wort schneiden, damit die Endung bleibt
+    x = wav[0].abs(); w = int(.02 * sr); pk = float(x.max()) + 1e-9
+    a, b = int((ws[hit].end + .05) * sr), int(ws[hit + 1].start * sr)
+    end = None
+    for i in range(a, max(a, b - w), w):
+        if float(x[i:i + w].pow(2).mean().sqrt()) < pk * .02: end = i / sr + .06; break   # ca. -34 dB unter Spitze
+    if end is None: end = max(ws[hit].end + .3, (ws[hit].end + ws[hit + 1].start) / 2)
+    n = min(wav.shape[-1], int(end * sr)); fade = int(.05 * sr)
     out = wav[..., :n].clone(); out[..., -fade:] *= torch.linspace(1, 0, fade)
     return out, round((wav.shape[-1] - n) / sr, 2)
 
