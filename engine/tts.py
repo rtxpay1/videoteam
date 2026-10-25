@@ -7,6 +7,7 @@
 # Prüfung: Whisper hört jeden Satz ab. Fehlen Wörter oder ist der Satz viel zu lang (Gestammel), wird er
 # mit anderem Zufallswert neu eingesprochen (höchstens 2-mal), der beste Versuch bleibt.
 import sys, os, re, json, difflib, torch, torchaudio
+sys.path.insert(0, os.path.dirname(__file__)); import tailcut
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
 HERE = os.path.dirname(__file__)
@@ -58,11 +59,14 @@ for i, raw in enumerate([l.strip() for l in sys.stdin if l.strip()], 1):
         wav = model.generate(speakable(text), language_id='de', audio_prompt_path=REF, exaggeration=ex, cfg_weight=cfg, temperature=TEMP)
         dur = wav.shape[-1] / model.sr
         if not asr: best = (1, wav, ''); break
+        wav, cutoff = tailcut.cut(asr, wav, model.sr, text)   # erfundene Wörter am Satzende abschneiden
+        if cutoff: print(f'  s{i}: {cutoff} s Gestammel am Ende abgeschnitten', flush=True)
+        dur = wav.shape[-1] / model.sr
         pcm = torchaudio.functional.resample(wav, model.sr, 16000)[0].numpy().astype('float32')   # direkt aus dem Speicher, ohne Datei
         heard = ' '.join(s.text for s in asr.transcribe(pcm, language='de', beam_size=1)[0])
-        # Abzug, wenn der Satz viel zu lang ist oder die Stimme Wörter dazuerfindet (Gestammel am Ende)
+        # Abzug, wenn der Satz viel zu lang ist oder die Stimme Wörter dazuerfindet
         extra = len(words(heard)) - len(words(text))
-        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(3, len(words(text)) * .25) else 0)
+        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(2, len(words(text)) * .2) else 0)
         if best is None or sc > best[0] or (sc == best[0] and wav.shape[-1] < best[1].shape[-1]): best = (sc, wav, heard)   # gleich gut: kürzer gewinnt
         if sc >= .85: break
         print(f'  s{i} Versuch {k + 1}: {sc:.2f} gehört: {heard.strip()}', flush=True)

@@ -154,6 +154,16 @@ SC[6] = t => {   // Rückblick 60er: Polaroid mit Silhouette, Sepia, Parallax
   const u = t - S_[6][0], rk = ph('Randy');
   bg([[0, '#c8a070'], [1, '#6a4a2a']]);
   parallax([{ depth: .3, draw: o => { g.fillStyle = 'rgba(255,240,210,.12)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(((i * 220 - o) % 1300 + 1300) % 1300 - 100, 500 + (i % 3) * 300, 120, 0, 7); g.fill(); } } }], u * 30);
+  // Filmstreifen links und rechts laufen durch (alter Film), dazu Kratzer und Flackern
+  [[0, 1], [W - 90, -1]].forEach(([x, dir]) => { g.fillStyle = '#2a1a0a'; g.fillRect(x, 0, 90, H); g.fillStyle = '#e8d8b0'; for (let y = -120; y < H + 120; y += 120) { const yy = ((y + dir * u * 260) % (H + 240) + H + 240) % (H + 240) - 120; g.fillRect(x + 25, yy, 40, 60); } });
+  g.save(); g.globalAlpha = .35; g.strokeStyle = '#fff8e0'; g.lineWidth = 2; for (let i = 0; i < 3; i++) { const sx = 150 + ((Math.floor(t * 12) * 97 + i * 331) % 780); g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx + 10, H); g.stroke(); } g.restore();
+  // Schule der 60er: Gebäude mit Glockenturm, Fenster gehen nacheinander an, ein Schüler läuft hin
+  const sk = eback(clamp(p(t, S_[6][0], S_[6][0] + .5))) * (1 - p(t, rk - .5, rk - .1));
+  if (sk > 0) { g.save(); g.translate(540, 1180); g.scale(sk, sk); g.fillStyle = '#5a3a20';
+    g.fillRect(-360, -360, 720, 360); g.fillRect(-70, -520, 140, 160); g.beginPath(); g.moveTo(-90, -520); g.lineTo(0, -620); g.lineTo(90, -520); g.fill();
+    for (let r2 = 0; r2 < 2; r2++) for (let c = 0; c < 6; c++) { const on = u * 4 > r2 * 6 + c; g.fillStyle = on ? '#ffe9a0' : '#3a2410'; g.fillRect(-320 + c * 110, -320 + r2 * 140, 70, 90); }
+    g.fillStyle = '#3a2410'; g.fillRect(-50, -120, 100, 120); g.fillStyle = '#ffd23f'; g.beginPath(); g.arc(0, -470, 26 + Math.sin(u * 6) * 3, 0, 7); g.fill();
+    const kx = lerp(-520, -90, clamp(u / 3)), step = Math.abs(Math.sin(u * 8)); g.fillStyle = '#2a1a0a'; g.beginPath(); g.arc(kx, -210 - step * 6, 26, 0, 7); g.fill(); g.fillRect(kx - 22, -185 - step * 6, 44, 110); g.fillRect(kx - 22, -75, 16, 70 + step * 6); g.fillRect(kx + 6, -75, 16, 70 - step * 6); g.restore(); }
   const k = eback(clamp(p(t, rk - .3, rk + .3))); if (k > 0) {
     g.save(); g.translate(540, 900); g.rotate(-.06 + Math.sin(u) * .02); g.scale(k, k);
     g.fillStyle = '#fbf6ea'; g.fillRect(-300, -360, 600, 700); g.fillStyle = '#8a6a4a'; g.fillRect(-260, -320, 520, 520);
