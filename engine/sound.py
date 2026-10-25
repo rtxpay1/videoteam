@@ -2,6 +2,7 @@
 # Aufruf: python3 sound.py <projektordner>   (liest sound.json, schreibt music.wav und sfx.wav)
 # sound.json: { "dur": 30.2, "bpm": 96, "seed": 3, "chords": [[57,60,64,69], ...], "pulse_from": 3.3, "pulse_to": 28,
 #               "events": [ {"t": 0.0, "type": "riser", "gain": .35, "pan": .5, "d": .5}, ... ] }
+# Erkennungs-Sound: {"t": .., "type": "eula", "gain": .3} – genau zweimal pro Video (erster Eula-Auftritt, Pointe)
 import json, os, sys, wave
 import numpy as np
 
@@ -89,7 +90,16 @@ def tick(f=2400):
 def wind(dd=2.0):
     n = int(dd * SR); tt = np.arange(n) / SR
     return lowpass(rng.standard_normal(n), 900) * (np.sin(np.pi * tt / dd) ** 2) * (1 + .5 * np.sin(2 * np.pi * 1.3 * tt)) * 1.8
-GEN = {'whoosh': whoosh, 'boom': boom, 'shimmer': shimmer, 'pop': pop, 'riser': riser, 'reverse': reverse, 'swipe': swipe, 'glitch': glitch, 'scratch': scratch, 'tick': tick, 'wind': wind}
+def eula():
+    # Erkennungs-Sound des Kanals: helles „Huu!“ der Eule plus Münzklingeln. Immer gleich (kein Zufall), ca. 0,45 s
+    n = int(.45 * SR); tt = np.arange(n) / SR
+    f = np.where(tt < .07, 620 + 900 * tt, 683 - 260 * (tt - .07)) * (1 + .012 * np.sin(2 * np.pi * 9 * tt))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    hoot = (np.sin(ph) + .35 * np.sin(2 * ph) + .12 * np.sin(3 * ph)) * np.clip(tt / .02, 0, 1) * np.exp(-np.maximum(tt - .12, 0) * 9) * .45
+    c = np.clip(tt - .16, 0, None); on = (tt >= .16)
+    coin = sum(a * np.sin(2 * np.pi * fr * c) * np.exp(-c * k) for fr, a, k in ((2350, .5, 14), (3810, .35, 18), (5240, .22, 24), (6900, .1, 30))) * on * .5
+    return hoot + coin
+GEN = {'eula': eula, 'whoosh': whoosh, 'boom': boom, 'shimmer': shimmer, 'pop': pop, 'riser': riser, 'reverse': reverse, 'swipe': swipe, 'glitch': glitch, 'scratch': scratch, 'tick': tick, 'wind': wind}
 
 sfx = np.zeros((2, N))
 for ev in C['events']:
