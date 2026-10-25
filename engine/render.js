@@ -26,7 +26,7 @@ const path = require('path');
   }
 
   const ff = spawn('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-',
-    '-c:v', 'libx264', '-preset', process.env.PRESET || (DRAFT ? 'veryfast' : 'fast'), '-crf', process.env.CRF || (DRAFT ? '26' : '17'), '-g', '30', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]   // Schlüsselbild jede Sekunde: fix.sh kann Stücke verlustfrei austauschen, { stdio: ['pipe', 'inherit', 'inherit'] });
+    '-c:v', 'libx264', '-preset', process.env.PRESET || (DRAFT ? 'veryfast' : 'fast'), '-crf', process.env.CRF || (DRAFT ? '26' : '17'), '-g', '30', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });   // -g 30: Schlüsselbild jede Sekunde, damit fix.sh Stücke verlustfrei austauschen kann
   const n = Math.round(+dur * fps), i0 = Math.round(+(process.env.START || 0) * fps);   // START=Sekunden: nur ab dort rendern
   for (let i = i0; i < n; i++) {
     await page.evaluate(([t, f]) => window.renderFrame(t, f), [i / fps, i]);
