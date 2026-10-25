@@ -1,0 +1,121 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<!-- Maskottchen-Entwürfe: je 2 Sekunden pro Figur, erst freundlich (winkt), dann staunend -->
+<script>
+window.READY3D = new Promise(r => window.__ready3d = r);
+window.CFG = { DUR: 6, CUTS: [], PHRASES: [[9, 9.5, ' ']], CAP_END: 0 };
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script>
+let FIG = null;
+// Gesicht: zwei Augen mit Glanzpunkt und ein Mund, der zwischen Lächeln und offenem Staunen wechselt
+function face(F, o) {
+  const T = F.THREE, grp = new T.Group(), black = new T.MeshBasicMaterial({ color: 0x140a24 }), white = new T.MeshBasicMaterial({ color: 0xffffff });
+  const eyes = [-1, 1].map(s => {
+    const e = new T.Group();
+    const w = new T.Mesh(new T.SphereGeometry(o.eye, 12, 8), white); w.scale.set(1, 1.25, .45); e.add(w);
+    const pu = new T.Mesh(new T.SphereGeometry(o.eye * .55, 10, 6), black); pu.scale.set(1, 1.2, .5); pu.position.set(0, -o.eye * .12, o.eye * .3); e.add(pu);
+    const hl = new T.Mesh(new T.SphereGeometry(o.eye * .18, 6, 4), white); hl.position.set(o.eye * .2, o.eye * .25, o.eye * .55); e.add(hl);
+    e.position.set(s * o.gap, o.ey, o.z); grp.add(e); return e;
+  });
+  const smile = new T.Mesh(new T.TorusGeometry(o.mouth, o.mouth * .22, 6, 12, Math.PI), black); smile.rotation.z = Math.PI; smile.position.set(0, o.my, o.z); grp.add(smile);
+  const open = new T.Mesh(new T.SphereGeometry(o.mouth * .8, 10, 8), new T.MeshBasicMaterial({ color: 0x5a0a20 })); open.scale.set(.9, 1.2, .3); open.position.set(0, o.my - o.mouth * .3, o.z); grp.add(open);
+  const cheeks = [-1, 1].map(s => { const c = new T.Mesh(new T.CircleGeometry(o.eye * .55, 10), new T.MeshBasicMaterial({ color: 0xff7aa0, transparent: true, opacity: .7 })); c.position.set(s * o.gap * 1.45, o.my + o.mouth * .2, o.z - .02); grp.add(c); return c; });
+  grp.userData = { eyes, smile, open, cheeks };
+  return grp;
+}
+function setMood(f, wow) { const u = f.userData; u.smile.visible = !wow; u.open.visible = wow; u.eyes.forEach(e => e.scale.setScalar(wow ? 1.25 : 1)); }
+// Gummiarm mit weißem Handschuh
+function arm(F, len, col) {
+  const T = F.THREE, grp = new T.Group();
+  const a = F.solid(new T.CapsuleGeometry(.11, len, 2, 6), F.toon(col), .12); a.position.y = -len / 2; grp.add(a);
+  const h = F.solid(new T.IcosahedronGeometry(.26, 1), F.toon(0xffffff), .08); h.position.y = -len - .15; grp.add(h);
+  return grp;
+}
+function leg(F, len, col) {
+  const T = F.THREE, grp = new T.Group();
+  const l = F.solid(new T.CapsuleGeometry(.12, len, 2, 6), F.toon(col), .12); l.position.y = -len / 2; grp.add(l);
+  const s = F.solid(new T.BoxGeometry(.45, .22, .6), F.toon(0xff4f7a), .08); s.position.set(0, -len - .1, .12); grp.add(s);
+  return grp;
+}
+
+// A: „Toki“, die goldene Münze
+function token(F) {
+  const T = F.THREE, grp = new T.Group();
+  const body = F.solid(new T.CylinderGeometry(1.6, 1.6, .55, 14), F.toon(0xffc93a, { emissive: 0xffa000, ei: .12 }), .04); body.rotation.x = Math.PI / 2; grp.add(body);
+  const rim = F.solid(new T.TorusGeometry(1.6, .13, 6, 14), F.toon(0xe09a1a), .05); grp.add(rim);
+  const inner = F.solid(new T.TorusGeometry(1.25, .05, 4, 14), F.toon(0xe8a828), 0); inner.position.z = .28; grp.add(inner);
+  const f = face(F, { eye: .3, gap: .45, ey: .25, my: -.45, mouth: .28, z: .32 }); grp.add(f); grp.userData.face = f;
+  const al = arm(F, 1, 0x3a2a4a), ar = arm(F, 1, 0x3a2a4a); al.position.set(-1.5, -.1, 0); ar.position.set(1.5, -.1, 0); grp.add(al, ar);
+  const ll = leg(F, .7, 0x3a2a4a), lr = leg(F, .7, 0x3a2a4a); ll.position.set(-.55, -1.5, 0); lr.position.set(.55, -1.5, 0); grp.add(ll, lr);
+  grp.userData.arms = [al, ar];
+  return grp;
+}
+// B: „Bit“, der kleine Bildschirm-Roboter
+function robot(F) {
+  const T = F.THREE, grp = new T.Group();
+  const head = F.solid(new T.BoxGeometry(2.6, 2.1, 1.7), F.toon(0x7a5aff), .04); head.position.y = .6; grp.add(head);
+  const scr = F.solid(new T.BoxGeometry(2.1, 1.55, .1), F.toon(0x10142a, { emissive: 0x10142a, ei: .5 }), 0); scr.position.set(0, .6, .86); grp.add(scr);
+  const f = face(F, { eye: .26, gap: .5, ey: .85, my: .2, mouth: .25, z: .95 }); grp.add(f); grp.userData.face = f;
+  const ant = F.solid(new T.CylinderGeometry(.05, .05, .7, 6), F.toon(0xffd23f), .1); ant.position.set(0, 2, 0); grp.add(ant);
+  const bulb = F.solid(new T.IcosahedronGeometry(.22, 1), F.toon(0xff4fb0, { emissive: 0xff4fb0, ei: .6 }), .1); bulb.position.set(0, 2.4, 0); grp.add(bulb);
+  const body = F.solid(new T.BoxGeometry(1.5, 1.1, 1.1), F.toon(0x5a3adf), .05); body.position.y = -1.1; grp.add(body);
+  const btn = F.solid(new T.CylinderGeometry(.16, .16, .1, 8), F.toon(0xffd23f, { emissive: 0xffd23f, ei: .4 }), 0); btn.rotation.x = Math.PI / 2; btn.position.set(0, -1, .58); grp.add(btn);
+  const al = arm(F, .9, 0x9a8aff), ar = arm(F, .9, 0x9a8aff); al.position.set(-.85, -.75, 0); ar.position.set(.85, -.75, 0); grp.add(al, ar);
+  const ll = leg(F, .5, 0x9a8aff), lr = leg(F, .5, 0x9a8aff); ll.position.set(-.4, -1.65, 0); lr.position.set(.4, -1.65, 0); grp.add(ll, lr);
+  grp.userData.arms = [al, ar];
+  return grp;
+}
+// C: „Eula“, die Wissens-Eule mit Doktorhut
+function owl(F) {
+  const T = F.THREE, grp = new T.Group(), orange = new T.Color(0xffa83a), belly = new T.Color(0xffe2a8), dark = new T.Color(0xe8862a);
+  const geo = F.paintFaces(new T.IcosahedronGeometry(1.5, 2), (v, n) => (v.z > .6 && v.y < .4 ? belly : n % 3 ? orange : dark));
+  geo.scale(1, 1.15, .9);
+  const body = F.solid(geo, F.toon(0xffffff, { vertexColors: true }), .04); grp.add(body);
+  const f = face(F, { eye: .38, gap: .55, ey: .55, my: -.35, mouth: .14, z: 1.18 }); grp.add(f); grp.userData.face = f;
+  const beak = F.solid(new T.ConeGeometry(.18, .4, 4), F.toon(0xff6a2a), .08); beak.rotation.x = Math.PI / 2 + .3; beak.position.set(0, .12, 1.35); grp.add(beak);
+  [-1, 1].forEach(s => { const tuft = F.solid(new T.ConeGeometry(.28, .7, 4), F.toon(0xe8862a), .06); tuft.position.set(s * .9, 1.75, 0); tuft.rotation.z = -s * .35; grp.add(tuft); });
+  const cap = new T.Group(); const top = F.solid(new T.BoxGeometry(1.8, .12, 1.8), F.toon(0x2a1a4a), .05); const base = F.solid(new T.CylinderGeometry(.55, .6, .4, 8), F.toon(0x2a1a4a), .05); base.position.y = -.25; cap.add(top, base);
+  const tassel = F.solid(new T.CylinderGeometry(.04, .04, .6, 4), F.toon(0xffd23f), .1); tassel.position.set(.8, -.3, .8); cap.add(tassel);
+  cap.position.set(0, 1.85, 0); cap.rotation.set(.15, .5, -.12); grp.add(cap);
+  const wl = F.solid(new T.IcosahedronGeometry(.7, 1), F.toon(0xe8862a), .06), wr = wl.clone(); [wl, wr].forEach((w, i) => { w.scale.set(.35, 1, .6); grp.add(w); });
+  const al = new T.Group(), ar = new T.Group(); al.add(wl); ar.add(wr); wl.position.y = -.6; wr.position.y = -.6; al.position.set(-1.4, .1, 0); ar.position.set(1.4, .1, 0); grp.add(al, ar);
+  [-1, 1].forEach(s => { const ft = F.solid(new T.BoxGeometry(.5, .15, .45), F.toon(0xff6a2a), .08); ft.position.set(s * .5, -1.75, .3); grp.add(ft); });
+  grp.userData.arms = [al, ar];
+  return grp;
+}
+function setup() {
+  const F = window.FX3D;
+  FIG = [token, robot, owl].map(fn => { const st = F.stage({ dist: 15, fov: 30 }); st.fig = st.add(fn(F)); st.ring = st.add(F.ring(2.6, .06, 0x7af0ff)); return st; });
+}
+const NAMES = [['A · TOKI', 'die goldene Münze'], ['B · BIT', 'der Bildschirm-Roboter'], ['C · EULA', 'die Wissens-Eule']];
+const BGS = [[[0, '#ff9a3a'], [.6, '#ff4f7a'], [1, '#5a1a8a']], [[0, '#1a3aff'], [.6, '#5a1aaa'], [1, '#ff4fb0']], [[0, '#2ad0a0'], [.6, '#1a7aff'], [1, '#3a1a7a']]];
+function scene(t) {
+  if (!FIG) setup();
+  const i = Math.min(2, Math.floor(t / 2)), u = t - i * 2, wow = u >= 1, st = FIG[i], f = st.fig, d = f.userData;
+  bg(BGS[i]); stars(t, .5); aurora(t, .4);
+  setMood(d.face, wow);
+  f.rotation.set(0, wow ? Math.sin(t * 3) * .1 : -.45 + Math.sin(t * 2) * .1, wow ? Math.sin(t * 9) * .04 : 0);
+  f.position.set(0, -.6 + Math.abs(Math.sin(t * 4)) * (wow ? .5 : .15), 0);
+  const [al, ar] = d.arms;
+  if (wow) { al.rotation.z = -2.6 + Math.sin(t * 12) * .15; ar.rotation.z = 2.6 - Math.sin(t * 12) * .15; }
+  else { al.rotation.z = -.25; ar.rotation.z = 2.4 + Math.sin(t * 8) * .5; }
+  st.ring.position.set(0, -2.6, 0); st.ring.rotation.set(1.45, 0, t);
+  st.cam.position.set(Math.sin(t * .5) * 2, .8, 15); st.cam.lookAt(0, -.2, 0);
+  g.drawImage(FX3D.render(st), 0, 0, W, H);
+  text(NAMES[i][0], 540, 300, 120, 'IDB', '#ffffff', { stroke: 10, strokeColor: 'rgba(10,6,30,.85)' });
+  text(NAMES[i][1], 540, 420, 64, 'IDX', '#ffd23f', { stroke: 8, strokeColor: 'rgba(10,6,30,.85)' });
+  text(wow ? 'staunt' : 'winkt', 540, 1620, 60, 'IDS', 'rgba(255,255,255,.85)');
+}
+</script>
+</body></html>
