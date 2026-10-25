@@ -1,0 +1,185 @@
+{
+ "dur": 64.151,
+ "sentences": [
+  [
+   0.55,
+   5.564
+  ],
+  [
+   6.123,
+   11.688
+  ],
+  [
+   11.988,
+   18.61
+  ],
+  [
+   18.91,
+   22.989
+  ],
+  [
+   23.289,
+   27.013
+  ],
+  [
+   27.313,
+   31.872
+  ],
+  [
+   32.172,
+   38.571
+  ],
+  [
+   38.871,
+   44.332
+  ],
+  [
+   44.632,
+   47.441
+  ],
+  [
+   47.741,
+   50.708
+  ],
+  [
+   51.008,
+   54.693
+  ],
+  [
+   54.993,
+   62.351
+  ]
+ ],
+ "phrases": [
+  [
+   0.55,
+   1.18,
+   "Was wäre,"
+  ],
+  [
+   1.18,
+   5.564,
+   "wenn du auf jedes Feld eines Schachbretts doppelt so viel Reis legst wie auf das Feld davor?"
+  ],
+  [
+   6.123,
+   6.753,
+   "Ein Korn,"
+  ],
+  [
+   6.753,
+   7.453,
+   "dann zwei,"
+  ],
+  [
+   7.453,
+   8.153,
+   "dann vier."
+  ],
+  [
+   8.153,
+   9.263,
+   "Klingt harmlos."
+  ],
+  [
+   9.478,
+   11.688,
+   "Aber wie viel liegt am Ende auf dem Brett?"
+  ],
+  [
+   11.988,
+   14.788,
+   "Die Idee stammt aus einer alten Legende:"
+  ],
+  [
+   14.788,
+   18.61,
+   "Ein Erfinder wünschte sich vom König genau diesen Reis als Belohnung."
+  ],
+  [
+   18.91,
+   20.1,
+   "Der König lachte,"
+  ],
+  [
+   20.1,
+   22.41,
+   "weil er das für einen Witz hielt,"
+  ],
+  [
+   22.41,
+   22.989,
+   "und sagte sofort ja."
+  ],
+  [
+   23.289,
+   26.439,
+   "Auf Feld zehn liegen fünfhundertzwölf Körner."
+  ],
+  [
+   26.439,
+   27.013,
+   "Eine Handvoll."
+  ],
+  [
+   27.313,
+   31.093,
+   "Auf Feld einundzwanzig ist es schon über eine Million."
+  ],
+  [
+   31.093,
+   31.872,
+   "Ein ganzer Sack."
+  ],
+  [
+   32.172,
+   38.262,
+   "Nach zweiunddreißig Feldern liegen insgesamt über vier Milliarden Körner auf dem Brett."
+  ],
+  [
+   38.262,
+   38.571,
+   "Rund hundert Tonnen."
+  ],
+  [
+   38.871,
+   42.161,
+   "Aber das Schachbrett hat vierundsechzig Felder,"
+  ],
+  [
+   42.161,
+   43.701,
+   "also doppelt so viele."
+  ],
+  [
+   43.701,
+   44.332,
+   "Und ab jetzt explodiert es."
+  ],
+  [
+   44.632,
+   47.441,
+   "Am Ende sind es rund achtzehn Trillionen Körner."
+  ],
+  [
+   47.741,
+   50.708,
+   "Das wären über vierhundert Milliarden Tonnen Reis."
+  ],
+  [
+   51.008,
+   54.693,
+   "Die ganze Welt erntet pro Jahr nur rund fünfhundert Millionen Tonnen."
+  ],
+  [
+   54.993,
+   61.083,
+   "Der König hätte also neunhundert Jahre lang die komplette Weltreisernte abgeben müssen."
+  ],
+  [
+   61.083,
+   62.351,
+   "Er hatte sich ein kleines bisschen verrechnet."
+  ]
+ ]
+}
