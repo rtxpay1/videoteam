@@ -5,7 +5,9 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 # Stimme wählbar per Umgebungsvariable VOICE (karlsson | bernd | eva | eigen), Standard: karlsson (Hausstimme)
 VOICE = os.environ.get('VOICE', 'karlsson')
 REF = os.path.join(os.path.dirname(__file__), '..', 'voices', f'hausstimme_{VOICE}.wav')
-EX, CFGW, TEMP = {'karlsson': (1.2, .3, .8), 'bernd': (1.3, .3, .8), 'eva': (.8, .35, .75), 'eigen': (1.0, .35, .8)}[VOICE]
+EX, CFGW, TEMP = {'karlsson': (1.2, .3, .8), 'bernd': (1.3, .3, .8), 'eva': (.8, .35, .75), 'eigen': (1.5, .3, .8)}[VOICE]
+# Feineinstellung per Umgebungsvariable: EXAG (Ausdruck), CFGW (kleiner = lebendiger), TEMP
+EX, CFGW, TEMP = float(os.environ.get('EXAG', EX)), float(os.environ.get('CFGW', CFGW)), float(os.environ.get('TEMP', TEMP))
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
 model = ChatterboxMultilingualTTS.from_pretrained(device='cpu')
 for i, line in enumerate([l.strip() for l in sys.stdin if l.strip()], 1):
