@@ -209,9 +209,9 @@ SC[8] = t => {   // Eula fliegt mit dem Bohrer los und taucht ins Loch: Weiterbo
   bg(SKY); stars(t, .2);
   A || setup3d();
   A.eula.pose(t, { mood: 'fly', k: eo(p(t, S_[8][0], S_[8][0] + .3)) });
-  A.eula.position.set(lerp(-2, 0, k), lerp(1.8, 5, Math.sin(k * Math.PI) * .6) + lerp(0, -2.5, k * k), lerp(.6, 0, k)); A.eula.rotation.x = k * 1.2;
+  A.eula.position.set(lerp(-2, 0, k), lerp(1.8, 5, Math.sin(k * Math.PI) * .6) + lerp(0, -2.5, k * k), lerp(.6, 0, k)); A.eula.rotation.x = k * .45;
   A.drill.visible = t < DIVE + .1; A.drill.position.set(A.eula.position.x, A.eula.position.y - 2.4, A.eula.position.z); A.drill.rotation.y = t * 20; A.drill.userData.mesh.material.emissiveIntensity = .3 * k;
-  snowShot([Math.sin(u * .6) * 3, 5, 16 - u], [-.5, 1.8 - k, 0], { t, glow: k });
+  snowShot([Math.sin(u * .6) * 3, 3.6, 15 - u * .8], [-.5, 2 - k * .6, 0], { t, glow: k });
   A.eula.position.set(-2, 1.8, .6); A.eula.rotation.x = 0;
   if (t > DIVE) { const f = 1 - p(t, DIVE, DIVE + .35); g.fillStyle = `rgba(255,220,180,${f})`; g.fillRect(0, 0, W, H); burst(t, DIVE, 540, 1000, { scale: 1, col: [255, 160, 60] }); }
   big('WIR BOHREN WEITER!', 300, 96, '#ffffff', kin(8, .1)(t), { sc2: 'rgba(20,30,90,.85)' });
@@ -230,7 +230,7 @@ SC[10] = t => {   // Split-Screen: Erdkern (3D) gegen Sonnenoberfläche
   const u = t - S_[10][0], so = ph('Sonne'), temp = 5000 * eio(p(t, S_[10][0] + .1, so));
   splitScreen(p(t, so - .3, so + .2), () => {
     bg([[0, '#3a0a0a'], [1, '#100008']]);
-    X.earth.rotation.set(0, -.3 + u * .05, 0); X.eula.visible = false; X.cam.position.set(Math.sin(u * .7) * .6, 0, 7.5 - u * .2); X.cam.lookAt(0, 0, 0); draw3d(X); X.eula.visible = true;
+    X.earth.rotation.set(0, -.3 + u * .05, 0); X.eula.visible = false; X.cam.position.set(Math.sin(u * .7) * .8, 0, 14 - u * .3); X.cam.lookAt(0, 0, 0); draw3d(X); X.eula.visible = true; text('ERDKERN', 300, 960, 66, 'IDB', '#ffffff', { stroke: 8, strokeColor: 'rgba(90,20,0,.85)' });
   }, () => {
     bg([[0, '#ffb020'], [1, '#ff5a10']]);
     for (let i = 0; i < 18; i++) { const a = i / 18 * 6.283 + u * .5, r = 360 + Math.sin(u * 3 + i) * 40; g.fillStyle = 'rgba(255,240,150,.5)'; g.beginPath(); g.arc(800 + Math.cos(a) * r, 960 + Math.sin(a) * r, 40, 0, 7); g.fill(); }
