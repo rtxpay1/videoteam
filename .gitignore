@@ -30,3 +30,5 @@ p-*/scene_built.html
 p-*/parts.txt
 p-*/rerender.sh
 p-*/queue.sh
+p-*/prev*/
+p-*/seg.log

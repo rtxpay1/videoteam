@@ -1,0 +1,205 @@
+{
+ "dur": 64.35,
+ "sentences": [
+  [
+   0.55,
+   4.424
+  ],
+  [
+   5.33,
+   8.246
+  ],
+  [
+   8.546,
+   16.198
+  ],
+  [
+   16.498,
+   20.188
+  ],
+  [
+   20.488,
+   25.679
+  ],
+  [
+   25.979,
+   29.379
+  ],
+  [
+   29.679,
+   34.823
+  ],
+  [
+   35.123,
+   39.084
+  ],
+  [
+   39.384,
+   44.51
+  ],
+  [
+   44.81,
+   49.375
+  ],
+  [
+   49.675,
+   55.537
+  ],
+  [
+   55.837,
+   62.55
+  ]
+ ],
+ "phrases": [
+  [
+   0.55,
+   1.18,
+   "Was wäre,"
+  ],
+  [
+   1.18,
+   3.21,
+   "wenn du in ein Loch springst,"
+  ],
+  [
+   3.21,
+   4.424,
+   "das quer durch die ganze Erde geht?"
+  ],
+  [
+   5.33,
+   6.59,
+   "Wo kommst du raus?"
+  ],
+  [
+   6.59,
+   8.246,
+   "Und wie lange dauert die Reise?"
+  ],
+  [
+   8.546,
+   11.976,
+   "Dein Weg ist fast dreizehntausend Kilometer lang."
+  ],
+  [
+   11.976,
+   15.336,
+   "Am Anfang zieht dich die Schwerkraft nach unten,"
+  ],
+  [
+   15.336,
+   16.198,
+   "du wirst immer schneller."
+  ],
+  [
+   16.498,
+   20.188,
+   "In der Mitte erreichst du rund dreißigtausend Kilometer pro Stunde."
+  ],
+  [
+   20.488,
+   23.218,
+   "Doch genau dort zieht dich nichts mehr."
+  ],
+  [
+   23.218,
+   25.679,
+   "Die Erde zieht von allen Seiten gleich stark."
+  ],
+  [
+   25.979,
+   29.129,
+   "Deshalb bremst dich die Schwerkraft ab jetzt."
+  ],
+  [
+   29.129,
+   29.379,
+   "Du wirst immer langsamer."
+  ],
+  [
+   29.679,
+   32.339,
+   "Bis du am anderen Ende stehen bleibst."
+  ],
+  [
+   32.339,
+   33.739,
+   "Von Deutschland aus:"
+  ],
+  [
+   33.739,
+   34.823,
+   "im Meer bei Neuseeland."
+  ],
+  [
+   35.123,
+   37.293,
+   "Und wie lange hat das gedauert?"
+  ],
+  [
+   37.293,
+   39.084,
+   "Nur rund achtunddreißig Minuten."
+  ],
+  [
+   39.384,
+   41.344,
+   "Hält dich dort niemand fest,"
+  ],
+  [
+   41.344,
+   42.939,
+   "fällst du zurück."
+  ],
+  [
+   43.103,
+   43.943,
+   "Hin und her,"
+  ],
+  [
+   43.943,
+   44.51,
+   "wie ein Pendel."
+  ],
+  [
+   44.81,
+   46.77,
+   "Und warum macht das niemand?"
+  ],
+  [
+   46.77,
+   49.375,
+   "Im Erdkern ist es über fünftausend Grad heiß."
+  ],
+  [
+   49.675,
+   53.805,
+   "Und das tiefste Loch der Welt ist nur zwölf Kilometer tief."
+  ],
+  [
+   53.805,
+   55.537,
+   "Nicht mal ein Tausendstel des Weges."
+  ],
+  [
+   55.837,
+   57.097,
+   "Schade eigentlich:"
+  ],
+  [
+   57.097,
+   61.087,
+   "Ans andere Ende der Welt fliegst du über zwanzig Stunden."
+  ],
+  [
+   61.087,
+   62.137,
+   "Durch die Erde:"
+  ],
+  [
+   62.137,
+   62.55,
+   "achtunddreißig Minuten."
+  ]
+ ]
+}
