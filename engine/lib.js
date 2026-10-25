@@ -149,7 +149,8 @@ function finish(t, frame) {
   const v = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.5)');
   g.fillStyle = v; g.fillRect(0, 0, W, H);
   g.save(); g.globalAlpha = .06; g.globalCompositeOperation = 'overlay'; g.drawImage(NOISE[frame % 3], 0, 0, W, H); g.restore();
-  const f = Math.min(1, t / .3, (CFG.DUR - t) / .5); if (f < 1) { g.fillStyle = `rgba(0,0,0,${1 - Math.max(0, f)})`; g.fillRect(0, 0, W, H); }
+  // Ein- und Ausblenden über Schwarz, außer bei Endlos-Schleifen (CFG.LOOP): da muss das letzte Bild ins erste übergehen
+  const f = CFG.LOOP ? 1 : Math.min(1, t / .3, (CFG.DUR - t) / .5); if (f < 1) { g.fillStyle = `rgba(0,0,0,${1 - Math.max(0, f)})`; g.fillRect(0, 0, W, H); }
 }
 
 // Schwebende Lichtpartikel über allem: auch ruhige Bilder bewegen sich jede Sekunde
