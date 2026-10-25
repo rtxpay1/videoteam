@@ -1,0 +1,229 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [Infinity])[0];   // Startzeit des Teilsatzes mit diesem Wort
+const SNAP = at(0, .6);
+window.CFG = {
+  REPL: [['zweiundvierzig', '42'], ['Zehntel Millimeter', '0,1 Millimeter'], ['sieben Faltungen', '7 Faltungen'], ['siebzehn', '17'], ['dreizehn Meter', '13 Meter'], ['dreiundzwanzig', '23'], ['siebenundzwanzig', '27'], ['vierhunderttausend', '400.000'], ['zwölf', '12'], ['neun Faltungen', '9 Faltungen']],
+  DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(Papier|42|Stapel|Meter|0,1|verdoppelt|7|Schulheft|17|13|Haus|23|Gebäude|27|Flugzeug|400\.000|Kilometer|Mond|halb|12|Weltrekord|Verdoppeln|9|Sonne)/,
+  split: t => 24 * (1 - p(t, 0, .6)) + 28 * Math.max(0, 1 - Math.abs(t - SNAP) / .3) + 26 * Math.max(0, 1 - Math.abs(t - S_[7][0]) / .3) + 20 * Math.max(0, 1 - Math.abs(t - S_[11][0]) / .3),
+  shake: t => (t > SNAP && t < SNAP + .5 ? 14 * (1 - (t - SNAP) / .5) : 0) + (t > S_[7][0] && t < S_[7][0] + .6 ? 16 * (1 - (t - S_[7][0]) / .6) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+const punch = (t, t0, amt = .12, d = .35) => 1 + amt * Math.max(0, 1 - Math.abs(t - t0) / d);
+function cam(z, rot = 0, cx = 540, cy = 960) { g.translate(cx, cy); g.rotate(rot); g.scale(z, z); g.translate(-cx, -cy); }
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(o.from || 1.9, 1, eback(k)), mblur: (1 - eo(k)) * 12, ls: o.ls ?? -3, glow: o.glow, blur: 50, stroke: o.stroke ?? 10, strokeColor: o.sc2 || 'rgba(10,6,30,.85)', rot: o.rot }); }
+const kin = (i, f, d = .35) => t => p(t, at(i, f), at(i, f) + d);
+const pw = (w, d = .35, off = 0) => t => p(t, ph(w) + off, ph(w) + off + d);
+function stamp(s, x, y, size, col, k, rot = -.12) {
+  if (k <= 0) return; const e = eback(clamp(k));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(lerp(2.4, 1, e), lerp(2.4, 1, e)); g.globalAlpha = clamp(k * 3);
+  g.font = `${size}px IDB`; g.letterSpacing = '4px'; const w = g.measureText(s).width;
+  g.strokeStyle = col; g.lineWidth = 10; g.beginPath(); g.roundRect(-w / 2 - 34, -size * .72, w + 68, size * 1.44, 16); g.stroke();
+  g.fillStyle = col; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(s, 0, 4); g.restore();
+}
+
+// ---------- Bausteine ----------
+// Papierstapel: Lagen als feine Linien, oben leicht gewellt
+function stack(x, yBottom, w, h, t, o = {}) {
+  if (h <= 0) return;
+  const gr = g.createLinearGradient(x - w / 2, 0, x + w / 2, 0); gr.addColorStop(0, '#e9e2d0'); gr.addColorStop(.5, '#fffaf0'); gr.addColorStop(1, '#d8cfb8');
+  g.save(); g.fillStyle = gr; g.shadowColor = o.glow || 'rgba(0,0,0,.35)'; g.shadowBlur = o.glow ? 50 : 20; g.fillRect(x - w / 2, yBottom - h, w, h); g.restore();
+  g.save(); g.strokeStyle = 'rgba(120,100,70,.35)'; g.lineWidth = 1.5; const n = Math.min(60, Math.floor(h / 6)); for (let i = 1; i < n; i++) { const y = yBottom - h * i / n; g.beginPath(); g.moveTo(x - w / 2, y); g.lineTo(x + w / 2, y + Math.sin(i + t) * 1.5); g.stroke(); } g.restore();
+}
+// Blatt Papier, das sich in 3D um die Mittellinie faltet (k: 0 flach → 1 gefaltet)
+function foldSheet(x, y, w, h, k, col = '#fffaf0') {
+  g.save(); g.translate(x, y);
+  g.fillStyle = col; g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 30; g.fillRect(-w / 2, -h / 2, w / 2, h); g.shadowBlur = 0;
+  const c = Math.cos(k * Math.PI), sx = c;   // rechte Hälfte klappt über die linke
+  g.save(); g.transform(sx, Math.sin(k * Math.PI) * .12, 0, 1, 0, 0);
+  g.fillStyle = c > 0 ? col : '#e6dcc4'; g.fillRect(0, -h / 2, w / 2, h);
+  g.strokeStyle = 'rgba(120,100,70,.4)'; g.lineWidth = 3; for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(10, -h / 2 + i * h / 8); g.lineTo(w / 2 - 20, -h / 2 + i * h / 8); g.stroke(); }
+  g.restore();
+  g.strokeStyle = 'rgba(120,100,70,.5)'; g.lineWidth = 2; g.setLineDash([10, 8]); g.beginPath(); g.moveTo(0, -h / 2); g.lineTo(0, h / 2); g.stroke(); g.setLineDash([]);
+  g.restore();
+}
+function globe(x, y, r, o = {}) {
+  g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 1.6, [60, 160, 255], .35); g.restore();
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#7fd4ff'); gr.addColorStop(.6, '#1f6fd6'); gr.addColorStop(1, '#0c2f7a');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, 7); g.clip(); const sp = o.spin || 0; g.fillStyle = 'rgba(80,210,120,.92)';
+  [[-.35, -.2, .32, .22], [.25, .1, .26, .34], [-.1, .45, .2, .14], [.7, -.4, .22, .16]].forEach(([dx, dy, w, h]) => { const xx = ((dx + sp + 1.5) % 3) - 1.5; g.beginPath(); g.ellipse(x + xx * r, y + dy * r, w * r, h * r, .4, 0, 7); g.fill(); });
+  g.restore();
+}
+function moon(x, y, r) { g.save(); g.globalCompositeOperation = 'lighter'; glow(x, y, r * 2.2, [200, 210, 255], .5); g.restore(); g.fillStyle = '#e8eaf6'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.fillStyle = 'rgba(140,145,175,.5)'; [[-.3, -.2, .2], [.25, .2, .25], [.1, -.4, .1]].forEach(([dx, dy, cr]) => { g.beginPath(); g.arc(x + dx * r, y + dy * r, cr * r, 0, 7); g.fill(); }); }
+function foldBadge(n, x, y, k) {   // Zähler „Faltung n“
+  if (k <= 0) return; const e = popIn(k);
+  g.save(); g.translate(x, y); g.scale(e, e); g.fillStyle = '#1a1030'; g.beginPath(); g.roundRect(-150, -48, 300, 96, 48); g.fill(); g.restore();
+  text(`${n}× GEFALTET`, x, y + 2, 40, 'IDB', '#ffd23f', { alpha: clamp(k * 3), ls: 2 });
+}
+function house(x, y, s, col = '#2a1a4a') { g.fillStyle = col; g.fillRect(x - s / 2, y - s * .8, s, s * .8); g.beginPath(); g.moveTo(x - s * .6, y - s * .8); g.lineTo(x, y - s * 1.25); g.lineTo(x + s * .6, y - s * .8); g.fill(); g.fillStyle = '#ffd27a'; for (let i = 0; i < 4; i++) g.fillRect(x - s * .35 + (i % 2) * s * .45, y - s * .65 + Math.floor(i / 2) * s * .3, s * .22, s * .18); }
+function plane(x, y, s, col = '#ffffff') { g.save(); g.translate(x, y); g.fillStyle = col; g.beginPath(); g.ellipse(0, 0, s, s * .16, 0, 0, 7); g.fill(); g.beginPath(); g.moveTo(-s * .1, 0); g.lineTo(-s * .45, -s * .7); g.lineTo(s * .15, -s * .05); g.fill(); g.beginPath(); g.moveTo(-s * .1, 0); g.lineTo(-s * .4, s * .6); g.lineTo(s * .15, s * .05); g.fill(); g.beginPath(); g.moveTo(-s * .8, 0); g.lineTo(-s * 1, -s * .35); g.lineTo(-s * .7, -s * .05); g.fill(); g.restore(); }
+
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+SC[0] = t => {   // Hook: Blatt dreht sich in 3D, faltet zusammen, Stapel schießt nach oben
+  bg([[0, '#ff7a3a'], [.55, '#ff3a7a'], [1, '#3a0a6a']]);
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 20; i++) { const a = i / 20 * 6.283 + t * .4; g.fillStyle = `rgba(255,255,255,${i % 2 ? .04 : .08})`; g.beginPath(); g.moveTo(540, 900); g.lineTo(540 + Math.cos(a) * 1900, 900 + Math.sin(a) * 1900); g.lineTo(540 + Math.cos(a + .12) * 1900, 900 + Math.sin(a + .12) * 1900); g.fill(); } g.restore();
+  g.save(); cam(1.2 - eo(p(t, 0, .6)) * .15 + (punch(t, SNAP, .18) - 1), Math.sin(t * 1.5) * .04);
+  if (t < SNAP) spin3d(t * 2.2, 540, 900, () => foldSheet(540, 900, 520, 700, eio(p(t, SNAP - .6, SNAP))), { skew: .05 });
+  else { const k = eo(p(t, SNAP, S_[1][0])); stack(540, 1300, 300, lerp(30, 1100, k), t, { glow: 'rgba(255,240,200,.6)' }); burst(t, SNAP, 540, 1300 - lerp(30, 1100, k), { scale: .8, col: [255, 245, 220] }); }
+  g.restore();
+  big('WAS WÄRE, WENN', 250, 96, '#ffffff', p(t, .2, .55));
+  big('42×', 1430, 190, '#ffd23f', p(t, at(0, .5), at(0, .5) + .3), { glow: 'rgba(255,210,60,.7)' });
+};
+SC[1] = t => {   // Schätzungen poppen auf wie Umfrage-Blasen
+  const u = t - S_[1][0], gs = ph('Die meisten');
+  bg([[0, '#2a0a6a'], [1, '#0a0420']]); stars(t, .5);
+  g.save(); cam(1 + u * .02); stack(540, 1250, 260, 360 + Math.sin(u * 2) * 20, t); g.restore();
+  big('WIE DICK?', 330, 150, '#ffffff', kin(1, .02)(t), { glow: 'rgba(200,160,255,.6)' });
+  [['1 m?', 220, 720, '#7af0ff'], ['5 m?', 840, 640, '#ffd23f'], ['10 m?', 260, 1020, '#ff8ad0'], ['3 m?', 820, 1000, '#7dff6a']].forEach(([s, x, y, c], i) => {
+    const k = popIn(p(t, gs + i * .2, gs + i * .2 + .35)); if (k <= 0) return;
+    g.save(); g.translate(x, y + Math.sin(u * 3 + i) * 10); g.scale(k, k); g.fillStyle = c; g.beginPath(); g.roundRect(-110, -55, 220, 110, 55); g.fill(); g.beginPath(); g.moveTo(-20, 50); g.lineTo(0, 85); g.lineTo(20, 50); g.fill(); g.restore();
+    text(s, x, y + Math.sin(u * 3 + i) * 10 + 2, 52, 'IDB', '#1a1030', { alpha: clamp(k) });
+  });
+};
+SC[2] = t => {   // Faltung in Zeitlupe: 0,1 mm, dann ×2
+  const u = t - S_[2][0], dbl = ph('Und jede'), k = p(t, dbl, dbl + 1.2);
+  bg([[0, '#fff1d6'], [1, '#ffc48a']]);
+  g.save(); g.strokeStyle = 'rgba(160,110,60,.12)'; g.lineWidth = 2; for (let y = 0; y < H; y += 60) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); } g.restore();
+  g.save(); cam(1.05 - u * .01); foldSheet(540, 950, 560, 760, eio(k), '#ffffff'); g.restore();
+  // Lupe auf die Kante: 0,1 mm
+  const lk = eo(p(t, S_[2][0] + .3, S_[2][0] + .9)); if (lk > 0) { g.save(); g.globalAlpha = lk; g.strokeStyle = '#2a1a40'; g.lineWidth = 10; g.beginPath(); g.arc(820, 560, 120, 0, 7); g.stroke(); g.beginPath(); g.moveTo(905, 645); g.lineTo(990, 730); g.stroke(); g.fillStyle = '#fffaf0'; g.fillRect(720, 552, 200, 16); g.restore(); text('0,1 mm', 820, 450, 56, 'IDB', '#2a1a40', { alpha: lk }); }
+  big('×2', 1400, 220, '#ff3a6a', p(t, dbl + .4, dbl + .75), { glow: 'rgba(255,60,110,.5)', sc2: 'rgba(255,255,255,.9)' });
+  big('PRO FALTUNG', 300, 90, '#2a1a40', p(t, dbl + .2, dbl + .55), { sc2: 'rgba(255,255,255,.9)' });
+};
+SC[3] = t => {   // Vergleich nebeneinander: Stapel = Schulheft
+  const u = t - S_[3][0], k = eio(p(t, S_[3][0] + .2, S_[3][0] + 1.6));
+  bg([[0, '#7af0c8'], [1, '#0a7a8a']]);
+  g.save(); cam(1.6 - k * .4 + u * .02);
+  g.fillStyle = 'rgba(0,0,0,.15)'; g.fillRect(0, 1220, W, 700);
+  stack(380, 1220, 260, 128 * k + 4, t);
+  g.save(); g.translate(720, 1220); g.fillStyle = '#ff5a8a'; g.fillRect(-150, -128, 300, 128); g.fillStyle = '#fff'; g.fillRect(-150, -120, 300, 8); g.fillStyle = '#1a1030'; g.font = '40px IDB'; g.textAlign = 'center'; g.fillText('HEFT', 0, -50); g.restore();
+  g.restore();
+  foldBadge(7, 540, 300, p(t, S_[3][0], S_[3][0] + .35));
+  big('1,3 cm', 1420, 130, '#ffffff', kin(3, .5)(t), { sc2: 'rgba(0,60,70,.85)' });
+};
+SC[4] = t => {   // Kamera schwenkt am Stapel hoch: 13 m, so hoch wie ein Haus
+  const u = t - S_[4][0], k = eio(p(t, S_[4][0] + .1, at(4, .7)));
+  bg([[0, rgb(mix([255, 200, 140], [120, 180, 255], k))], [1, '#ffe8c8']]);
+  g.save(); g.translate(0, k * 900);
+  g.fillStyle = '#5aa04a'; g.fillRect(0, 1500, W, 1400);
+  house(760, 1500, 520); stack(330, 1500, 200, 1180 * eo(p(t, S_[4][0], at(4, .6))), t);
+  g.save(); g.strokeStyle = '#1a1030'; g.lineWidth = 6; g.setLineDash([16, 12]); g.beginPath(); g.moveTo(180, 320); g.lineTo(1000, 320); g.stroke(); g.setLineDash([]); g.restore();
+  g.restore();
+  foldBadge(17, 540, 260, p(t, S_[4][0], S_[4][0] + .35));
+  big('13 METER', 420, 130, '#ffffff', kin(4, .4)(t), { sc2: 'rgba(40,30,80,.85)' });
+};
+SC[5] = t => {   // Wettrennen der Höhen: Stapel überholt das höchste Gebäude
+  const u = t - S_[5][0], k = eio(p(t, S_[5][0] + .1, S_[6][0] - .2));
+  bg([[0, '#1a0a4a'], [.6, '#ff5a6a'], [1, '#ffb05a']]);
+  const sh = lerp(200, 1260, k);
+  g.save(); cam(1.02 + u * .02);
+  for (let i = 0; i < 9; i++) { const x = i * 125, h = 200 + (i * 97) % 300; g.fillStyle = '#2a1040'; g.fillRect(x, 1500 - h, 110, h); }
+  g.fillStyle = '#14082a'; g.beginPath(); g.moveTo(700, 1500); g.lineTo(720, 380); g.lineTo(735, 260); g.lineTo(750, 380); g.lineTo(780, 1500); g.fill();
+  text('828 m', 760, 220, 44, 'IDX', '#ffffff', { alpha: .9 });
+  stack(400, 1500, 120, sh, t, { glow: k > .9 ? 'rgba(255,240,180,.8)' : null });
+  if (sh > 1240) burst(t, S_[5][0] + .1 + (S_[6][0] - .3 - S_[5][0]) * .97, 400, 240, { scale: .6, col: [255, 230, 150] });
+  g.restore();
+  foldBadge(23, 540, 1440, p(t, S_[5][0], S_[5][0] + .35));
+  big('839 m', 160, 110, '#ffd23f', kin(5, .75)(t), { glow: 'rgba(255,210,60,.6)', x: 330 });
+};
+SC[6] = t => {   // Parallax durch die Wolken: Flugzeug fliegt unter der Stapelspitze durch
+  const u = t - S_[6][0];
+  bg([[0, '#2a7aff'], [1, '#bfe4ff']]);
+  const cloud = (x, y, s, a) => { g.fillStyle = `rgba(255,255,255,${a})`; [[0, 0, 1], [-.7, .15, .7], [.7, .1, .8], [.2, -.35, .7]].forEach(([dx, dy, r]) => { g.beginPath(); g.arc(x + dx * s, y + dy * s, r * s, 0, 7); g.fill(); }); };
+  parallax([
+    { depth: .3, draw: o => { for (let i = 0; i < 5; i++) cloud(((i * 300 + o) % (W + 400)) - 200, 1500 + (i % 3) * 120, 80, .5); } },
+    { depth: 1, draw: o => { stack(540, H + 100, 110, 1700, t); plane(((o * 1.6) % (W + 600)) - 300, 700, 120); } },
+    { depth: 2.2, draw: o => { for (let i = 0; i < 4; i++) cloud(((i * 480 + o) % (W + 800)) - 400, 1250 + (i % 2) * 300, 200, .85); } },
+  ], u * 260);
+  foldBadge(27, 540, 260, p(t, S_[6][0], S_[6][0] + .35));
+  big('13 KM', 400, 140, '#ffffff', kin(6, .5)(t), { sc2: 'rgba(20,50,120,.85)' });
+};
+SC[7] = t => {   // Antwort: Zoom raus bis ins All, Zähler rast hoch
+  const u = t - S_[7][0], k = eio(p(t, S_[7][0] + .2, S_[8][0] - .1));
+  bg([[0, '#020418'], [1, '#100a3a']]); stars(t, .9);
+  g.save(); const z = lerp(5, 1, k); g.translate(540, 1500); g.scale(z, z); g.translate(-540, -1500);
+  globe(540, 1700, 260, { spin: u * .1 });
+  beam(540, 1440, 540, lerp(1440, -200, k), 8, [255, 245, 220]);
+  g.restore();
+  const n = Math.round(440000 * eio(p(t, ph('Nach zweiundvierzig'), S_[8][0])));
+  big('DIE ANTWORT', 280, 96, '#ffffff', kin(7, .02)(t));
+  foldBadge(42, 540, 420, kin(7, .3)(t));
+  big(n.toLocaleString('de-DE') + ' km', 1380, 120, '#ffd23f', pw('Nach zweiundvierzig')(t), { ls: -4, glow: 'rgba(255,210,60,.7)' });
+};
+SC[8] = t => {   // Iris: Stapelspitze zieht am Mond vorbei
+  const u = t - S_[8][0], k = eio(p(t, S_[8][0], S_[9][0]));
+  bg([[0, '#0a0420'], [1, '#1a0a4a']]); stars(t, 1, -u * 3);
+  iris(p(t, S_[8][0], S_[8][0] + .6), 540, 960, () => {
+    bg([[0, '#0a0430'], [1, '#2a0a5a']]); stars(t, 1);
+    moon(760, 760, 150);
+    stack(400, H + 200, 90, lerp(1100, 1900, k), t, { glow: 'rgba(255,240,200,.5)' });
+    big('WEITER ALS', 300, 100, '#ffffff', kin(8, .15)(t));
+    big('BIS ZUM MOND', 1420, 110, '#c8d0ff', kin(8, .4)(t), { glow: 'rgba(200,210,255,.6)' });
+  }, { ring: '#ffd23f' });
+};
+SC[9] = t => {   // Fläche halbiert sich: Rechteck teilt sich immer weiter
+  const u = t - S_[9][0], hb = ph('Weil das'), n = Math.min(8, Math.floor(Math.max(0, t - hb) / .35));
+  bg([[0, '#3a1a7a'], [1, '#100830']]);
+  let x = 140, y = 520, w = 800, h = 900;
+  for (let i = 0; i < n + 1; i++) {
+    const last = i === n; g.fillStyle = last ? '#fffaf0' : `rgba(255,250,240,${.12 + .05 * (i % 2)})`;
+    g.fillRect(x, y, w, h);
+    if (i % 2 === 0) w /= 2; else h /= 2;
+  }
+  g.save(); g.strokeStyle = '#ff3a6a'; g.lineWidth = 6; g.strokeRect(140, 520, 800, 900); g.restore();
+  big('WARUM NICHT?', 330, 120, '#ffffff', kin(9, .02)(t));
+  big('NUR NOCH HALB SO GROSS', 1440, 64, '#ffd23f', p(t, hb + .3, hb + .65), { ls: 1 });
+};
+SC[10] = t => {   // Rekord: langer Papierstreifen zeichnet sich, Stempel 12
+  const u = t - S_[10][0], rec = ph('Der Weltrekord');
+  bg([[0, '#ffd27a'], [1, '#ff8a3a']]);
+  const pts = Array.from({ length: 60 }, (_, i) => [i / 59, .5 + Math.sin(i / 59 * Math.PI * 3 + u) * .18]);
+  drawOn([pts], p(t, rec, rec + 1.4), 540, 900, 1100, 700, '#fffaf0', 60, { glow: 'rgba(255,255,255,.6)', spark: false });
+  g.save(); cam(1 + Math.sin(u * 2) * .02); stack(540, 1300, 260, 60 + 30 * Math.sin(u * 3), t); g.restore();
+  big('ZU KLEIN, ZU DICK', 300, 90, '#3a1a00', kin(10, .02)(t), { sc2: 'rgba(255,255,255,.85)' });
+  stamp('REKORD: 12', 540, 1450, 96, '#c0182a', p(t, rec + .3, rec + .6), -.08);
+};
+SC[11] = t => {   // Pointe: Kurve schießt hoch bis zur Sonne, Endkarte
+  const u = t - S_[11][0], sun = ph('Mit nur'), k = p(t, S_[11][0] + .2, S_[11][1] - .2);
+  bg([[0, '#2a0a5a'], [.6, '#ff3a6a'], [1, '#ffb03a']]);
+  g.save(); g.strokeStyle = 'rgba(255,255,255,.15)'; g.lineWidth = 2; for (let y = 500; y <= 1400; y += 100) { g.beginPath(); g.moveTo(120, y); g.lineTo(980, y); g.stroke(); } g.restore();
+  const pts = Array.from({ length: 80 }, (_, i) => { const x = i / 79; return [x, 1 - Math.pow(2, x * 10) / 1024]; });
+  drawOn([pts], eio(k), 550, 950, 860, 900, '#ffd23f', 14);
+  const sk = eo(p(t, sun + .6, sun + 1.4)); if (sk > 0) { g.save(); g.globalCompositeOperation = 'lighter'; glow(980, 500, 260 * sk, [255, 200, 80], .9); g.restore(); g.fillStyle = '#ffe27a'; g.beginPath(); g.arc(980, 500, 80 * sk, 0, 7); g.fill(); }
+  big('VERDOPPELN', 280, 110, '#ffffff', kin(11, .02)(t));
+  big('51× = SONNE', 1440, 110, '#ffd23f', p(t, sun + .8, sun + 1.15), { glow: 'rgba(255,210,60,.7)' });
+  const ke = p(t, END, END + .45);
+  if (ke > 0) {
+    g.fillStyle = `rgba(30,6,40,${eo(ke)})`; g.fillRect(0, 0, W, H);
+    g.save(); g.font = '120px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.letterSpacing = '-4px';
+    const gr = g.createLinearGradient(140, 0, 940, 0); gr.addColorStop(0, '#fffaf0'); gr.addColorStop(.5, '#ffd23f'); gr.addColorStop(1, '#ff5a8a');
+    g.fillStyle = gr; g.translate(540, 860); const s = lerp(1.3, 1, eback(ke)); g.scale(s, s);
+    g.fillText('EIN BLATT.', 0, -75); g.fillText('BIS ZUM MOND.', 0, 75); g.restore();
+    text('Probier mal, wie oft du es schaffst.', 540, 1080, 46, 'IDS', '#ffffff', { alpha: eo(p(t, END + .3, END + .8)) });
+  }
+};
+function scene(t) {
+  let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
+  SC[i](t);
+}
+</script>
+</body></html>
