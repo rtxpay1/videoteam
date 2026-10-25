@@ -39,3 +39,4 @@ qa/out/
 voices/eigen/
 voices/hausstimme_eigen.wav
 hoerproben/
+voices/hausstimme_piep_*.wav
