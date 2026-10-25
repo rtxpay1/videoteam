@@ -38,3 +38,4 @@ qa/out/
 # eigene Stimmvorlage des Kanals: nie ins öffentliche Repository
 voices/eigen/
 voices/hausstimme_eigen.wav
+hoerproben/
