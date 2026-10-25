@@ -109,7 +109,8 @@ function figure(color = 0xff5a8a) {
 // Die Wissens-Eule des Kanals: rund (keine Facetten), rote Cappie mit goldenem Token, goldene Augen.
 // Benutzung:  const eu = st.add(FX3D.eula());  und in scene(t):  eu.pose(t, { mood: 'wave' })
 // Stimmungen: idle (schwebt leicht), wave (winkt), wow (staunt, Flügel hoch), point (zeigt zur Seite, dir: 1 rechts / -1 links),
-// fly (flattert), think (Flügel am Kinn, Blick nach oben), happy (Augen zu Lachbögen). Blinzeln läuft automatisch.
+// fly (flattert), think (Flügel am Kinn, Blick nach oben), happy (Augen zu Lachbögen), sleepy (müde: Lider halb zu, Kopf nickt weg;
+// mit o.lid = 1 schläft sie ganz). Blinzeln läuft automatisch.
 // Weitere Optionen: look [x, y] (-1..1, Blickrichtung), blink false (aus), k (0..1, Stärke der Pose, für weiche Übergänge).
 const clamp01 = x => Math.min(1, Math.max(0, x)), mixv = (a, b, k) => a + (b - a) * k;
 function soft(color, o) { const m = toon(color, o); m.flatShading = false; return m; }
@@ -171,12 +172,13 @@ function eula() {
   // Pose setzen: Flügelwinkel (z) pro Seite, Körperneigung, Hüpfen, Mimik
   grp.pose = (t, o = {}) => {
     const mood = o.mood || 'idle', k = o.k ?? 1, dir = o.dir || 1, U = face.userData;
-    let wl = -.25, wr = .25, bob = Math.sin(t * 2.2) * .08, tilt = Math.sin(t * 1.3) * .04, turn = 0, lean = 0, wowF = 0, happyF = 0, look = o.look || [0, 0], lift = 0;
+    let wl = -.25, wr = .25, bob = Math.sin(t * 2.2) * .08, tilt = Math.sin(t * 1.3) * .04, turn = 0, lean = 0, wowF = 0, happyF = 0, sleepF = 0, look = o.look || [0, 0], lift = 0;
     if (mood === 'wave') { wr = 2.3 + Math.sin(t * 9) * .45; tilt = -.06; turn = -.25; }
     if (mood === 'wow') { wl = -2.5 + Math.sin(t * 12) * .15; wr = 2.5 - Math.sin(t * 12) * .15; bob = Math.abs(Math.sin(t * 6)) * .35; tilt = Math.sin(t * 9) * .04; wowF = 1; }
     if (mood === 'point') { if (dir > 0) wr = 1.45 + Math.sin(t * 5) * .06; else wl = -1.45 - Math.sin(t * 5) * .06; turn = dir * .35; look = o.look || [dir, .1]; }
     if (mood === 'fly') { const fl = Math.sin(t * 16) * .9; wl = -1.6 - fl; wr = 1.6 + fl; lift = .6 + Math.sin(t * 4) * .25; bob = 0; lean = .25; }
     if (mood === 'think') { wr = 2.05; tilt = .12; look = o.look || [.4, .8]; bob = Math.sin(t * 1.5) * .05; }
+    if (mood === 'sleepy') { sleepF = 1; const nod = Math.max(0, Math.sin(t * 1.1)); lean = .22 * nod * nod; wl = -.08; wr = .08; bob = Math.sin(t * 1.1) * .03; tilt = Math.sin(t * .7) * .08; look = o.look || [0, -.5]; }
     if (mood === 'happy') { happyF = 1; bob = Math.abs(Math.sin(t * 7)) * .22; wl = -.6 - Math.abs(Math.sin(t * 7)) * .4; wr = .6 + Math.abs(Math.sin(t * 7)) * .4; }
     wings[0].rotation.z = mixv(-.25, wl, k); wings[1].rotation.z = mixv(.25, wr, k); wings[1].rotation.y = mood === 'think' ? mixv(0, -1.1, k) : 0;
     rig.position.y = mixv(0, bob + lift, k); feet.forEach(f => f.rotation.x = mood === 'fly' ? mixv(0, .6, k) : 0);
@@ -190,7 +192,9 @@ function eula() {
       e.scale.setScalar(1 + wowF * k * .18);
       e.userData.look.position.set(look[0] * r * .2 - e.userData.s * r * .06, look[1] * r * .2 - r * .04, 0);
       lid.visible = b > .02 || h; lash.visible = b > .85; happy.visible = h;
-      const kk = h ? 1 : b; lid.scale.set(1, Math.max(kk, .02) * 1.08, .7); lid.position.y = r * 1.2 * (1 - kk);
+      const sl = sleepF * k * (o.lid ?? (.55 + .3 * Math.max(0, Math.sin(t * 1.1)))), kk = h ? 1 : Math.max(b, sl);
+      lid.visible = kk > .02; lash.visible = kk > .85;
+      lid.scale.set(1, Math.max(kk, .02) * 1.08, .7); lid.position.y = r * 1.2 * (1 - kk);
     });
     return grp;
   };
