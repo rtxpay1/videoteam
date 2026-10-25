@@ -30,8 +30,12 @@ def speakable(s):
 # Zahlwörter schreibt Whisper oft als Ziffern, deshalb werden sie bei der Prüfung nicht verlangt
 NUM = re.compile(r'(null|eins|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|zig|ßig|hundert|tausend|million|milliard|billion|trillion)')
 words = lambda s: re.findall(r'[a-zäöüß]+', s.lower())
+# Whisper schreibt Einheiten abgekürzt; vor dem Vergleich wieder ausschreiben
+UNITS = [(r'\bcm\b', 'zentimeter'), (r'\bkm\b', 'kilometer'), (r'\bm\b', 'meter'), (r'°\s*c\b', 'grad'), (r'°', 'grad'), (r'%', 'prozent'), (r'\bkg\b', 'kilogramm')]
 def score(text, heard):
     want = [w for w in words(text) if len(w) > 2 and not NUM.search(w)]
+    heard = heard.lower()
+    for a, b in UNITS: heard = re.sub(a, ' ' + b + ' ', heard)
     got = words(heard)
     if not want: return 1.0
     return sum(1 for w in want if difflib.get_close_matches(w, got, n=1, cutoff=.75)) / len(want)
@@ -56,7 +60,7 @@ for i, raw in enumerate([l.strip() for l in sys.stdin if l.strip()], 1):
         heard = ' '.join(s.text for s in asr.transcribe(pcm, language='de', beam_size=1)[0])
         sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0)   # viel zu lang = Gestammel
         if best is None or sc > best[0]: best = (sc, wav, heard)
-        if sc >= .9: break
+        if sc >= .85: break
         print(f'  s{i} Versuch {k + 1}: {sc:.2f} gehört: {heard.strip()}', flush=True)
     torchaudio.save(os.path.join(out, f's{i}.wav'), best[1], model.sr)
     print(f's{i}.wav', round(best[1].shape[-1] / model.sr, 2), f'Prüfung {best[0]:.2f}' if asr else '', flush=True)
