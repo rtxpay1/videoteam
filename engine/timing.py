@@ -18,7 +18,8 @@ def pauses(f):
     return list(zip(st, en))
 
 d = sys.argv[1]
-lines = [l.strip() for l in open(os.path.join(d, 'lines.txt'), encoding='utf-8') if l.strip()]
+# Betonungszeichen [+] / [-] / [=] am Zeilenanfang gelten nur für die Stimme
+lines = [re.sub(r'^\[[+\-=]\]\s*', '', l.strip()) for l in open(os.path.join(d, 'lines.txt'), encoding='utf-8') if l.strip()]
 parts, t, sentences, phrases = [], LEAD, [], []
 for i, line in enumerate(lines, 1):
     src, out = os.path.join(d, 'v', f's{i}.wav'), os.path.join(d, 'v', f't{i}.wav')

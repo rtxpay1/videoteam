@@ -35,6 +35,6 @@ p-*/seg.log
 p-*/draft*
 p-*/test/
 qa/out/
-# eigene Stimme des Kanal-Inhabers: nie ins öffentliche Repository
+# eigene Stimmvorlage des Kanals: nie ins öffentliche Repository
 voices/eigen/
 voices/hausstimme_eigen.wav
