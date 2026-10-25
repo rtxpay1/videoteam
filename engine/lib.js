@@ -103,19 +103,22 @@ function setupCaptions() {
   WORDS.forEach(w => { const len = cur.map(x => x.w).join(' ').length + w.w.length; if (cur.length && (cur.length >= 3 || len > 18 || w.a - cur[cur.length - 1].b > .2)) { CHUNKS.push(cur); cur = []; } cur.push(w); if (/[.?,:!]$/.test(w.w)) { CHUNKS.push(cur); cur = []; } });
   if (cur.length) CHUNKS.push(cur);
 }
+// Untertitel: Wörter erscheinen einzeln, wenn sie gesprochen werden (Pop mit kleinem Überschwingen und Kipp-Wackler).
+// Farben: normale Wörter weiß, Schlüsselwörter gelb, das gerade gesprochene Wort grün (größer und mit Leuchten).
 function captions(t, y = 1560) {
-  const ch = CHUNKS.find(c => t >= c[0].a - .05 && t < c[c.length - 1].b + .25); if (!ch) return;
-  const size = 76; g.save(); g.font = `${size}px IDB`; g.textBaseline = 'middle';
-  const widths = ch.map(w => g.measureText(w.w).width), sp = 34, total = widths.reduce((a, b) => a + b, 0) + sp * (ch.length - 1);
-  let x = W / 2 - total / 2; const inA = eo(p(t, ch[0].a - .05, ch[0].a + .12));
+  const ci = CHUNKS.findIndex(c => t >= c[0].a - .05 && t < c[c.length - 1].b + .25); if (ci < 0) return; const ch = CHUNKS[ci];
+  const size = 78; g.save(); g.font = `${size}px IDB`; g.textBaseline = 'middle';
+  const widths = ch.map(w => g.measureText(w.w).width), sp = 40, total = widths.reduce((a, b) => a + b, 0) + sp * (ch.length - 1);
+  const out = p(t, ch[ch.length - 1].b + .1, ch[ch.length - 1].b + .25);
+  let x = W / 2 - total / 2;
   ch.forEach((w, i) => {
-    const on = t >= w.a && t < w.b + .05, past = t >= w.b, key = CFG.KEY.test(w.w);
-    const pop = on ? 1 + .05 * Math.sin(p(t, w.a, w.a + .18) * Math.PI) : 1;
-    g.save(); g.translate(x + widths[i] / 2, y + (1 - inA) * 30); g.scale(pop, pop); g.globalAlpha = inA; g.textAlign = 'center';
-    g.lineWidth = 14; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(w.w, 0, 0);
-    g.fillStyle = on ? (key ? '#ffd23f' : '#ffffff') : (past ? (key ? '#ffd23f' : '#f2f2f2') : 'rgba(255,255,255,.55)');
-    if (on && key) { g.shadowColor = 'rgba(255,210,63,.6)'; g.shadowBlur = 30; }
-    g.fillText(w.w, 0, 0); g.restore(); x += widths[i] + sp;
+    const k = p(t, w.a - .06, w.a + .16); if (k <= 0) { x += widths[i] + sp; return; }
+    const key = CFG.KEY.test(w.w), on = t >= w.a - .06 && t < w.b + .05, col = key ? '#ffd23f' : on ? '#7dff6a' : '#ffffff', e = eback(k), wob = (1 - k) * (i % 2 ? .12 : -.12);
+    const sc = (.55 + .45 * e) * (on ? 1.06 : 1) * (1 - out * .2);
+    g.save(); g.translate(x + widths[i] / 2, y + (1 - e) * 36 - out * 30); g.rotate(wob); g.scale(sc, sc); g.globalAlpha = clamp(k * 2.5) * (1 - out); g.textAlign = 'center';
+    g.lineWidth = 15; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(w.w, 0, 0);
+    if (on) { g.shadowColor = key ? 'rgba(255,210,63,.7)' : 'rgba(125,255,106,.7)'; g.shadowBlur = 34; }
+    g.fillStyle = col; g.fillText(w.w, 0, 0); g.restore(); x += widths[i] + sp;
   });
   g.restore();
 }
@@ -138,7 +141,8 @@ function rgbSplit(px) {
   const [a, b] = OFF, ga = a.getContext('2d'), gb = b.getContext('2d');
   [[ga, '#ff0000'], [gb, '#00ffff']].forEach(([x, col]) => { x.globalCompositeOperation = 'source-over'; x.clearRect(0, 0, W, H); x.drawImage(cv, 0, 0); x.globalCompositeOperation = 'multiply'; x.fillStyle = col; x.fillRect(0, 0, W, H); });
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  g.drawImage(a, -px, 0); g.globalCompositeOperation = 'lighter'; g.drawImage(b, px, px * .3); g.restore();
+  const m = px * H / W + px;   // beide Kanäle um den Versatz größer, so decken sie das ganze Bild
+  g.drawImage(a, -2 * px, -m, W + 2 * px, H + 2 * m); g.globalCompositeOperation = 'lighter'; g.drawImage(b, 0, -m + px * .3, W + 2 * px, H + 2 * m); g.restore();
 }
 function grade() {
   const ga = OFF[0].getContext('2d'); ga.globalCompositeOperation = 'source-over'; ga.drawImage(cv, 0, 0);
@@ -165,9 +169,13 @@ function motes(t) {
 window.renderFrame = (t, frame) => {
   g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none';
   const sh = CFG.CUTS.reduce((m, tb) => { const d = t - tb; return d > 0 && d < .25 ? (1 - d / .25) * 10 : m; }, 0) + (CFG.shake ? CFG.shake(t) : 0);
-  g.save(); g.translate(Math.sin(t * 90) * sh, Math.cos(t * 70) * sh);
-  // Hausregel „nie Stillstand“: immer eine leichte Kamerafahrt unter jeder Szene
-  g.translate(W / 2, H / 2); g.scale(1.04 + .025 * Math.sin(t * .9), 1.04 + .025 * Math.sin(t * .9)); g.rotate(.01 * Math.sin(t * .6)); g.translate(-W / 2 + 18 * Math.sin(t * .5), -H / 2 + 22 * Math.cos(t * .41));
+  // Hausregel „nie Stillstand“: immer eine leichte Kamerafahrt unter jeder Szene.
+  // Der Zoom wird pro Bild so gewählt, dass Verschiebung, Drehung und Wackeln nie den Bildrand freilegen.
+  const shx = Math.sin(t * 90) * sh, shy = Math.cos(t * 70) * sh, tx = 10 * Math.sin(t * .5), ty = 12 * Math.cos(t * .41), rot = .006 * Math.sin(t * .6);
+  const need = Math.max(1 + 2 * (Math.abs(tx * 1.1 + shx) + Math.abs(rot) * H / 2 + 3) / W, 1 + 2 * (Math.abs(ty * 1.1 + shy) + Math.abs(rot) * W / 2 + 3) / H);
+  const zs = Math.max(1.035 + .02 * Math.sin(t * .9), need);
+  g.save(); g.translate(shx, shy);
+  g.translate(W / 2, H / 2); g.scale(zs, zs); g.rotate(rot); g.translate(-W / 2 + tx, -H / 2 + ty);
   scene(t);
   g.restore();
   motes(t);

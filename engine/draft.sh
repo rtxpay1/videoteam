@@ -7,6 +7,6 @@ cd /home/user/videoteam
 d="$1"
 python3 engine/build.py "$d"
 D=$(python3 -c "import json;print(json.load(open('$d/timing.json'))['dur'])")
-DRAFT=1 bash engine/prender.sh "$d/scene_built.html" "$d/draft.mp4" "$D" 3 10
+DRAFT=1 bash engine/prender.sh "$d/scene_built.html" "$d/draft.mp4" "$D" 4 10
 ffmpeg -loglevel error -y -i "$d/draft.mp4" -vf "fps=1/4,scale=135:-1,tile=8x2" -frames:v 1 "$d/draft_sheet.jpg"
 python3 engine/stillcheck.py "$d/draft.mp4"

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Paralleles Rendern: teilt das Video in N Stücke, rendert sie gleichzeitig und fügt sie verlustfrei zusammen.
-# Aufruf: prender.sh <scene_built.html> <out.mp4> <dauer> [N=3] [fps=30]
+# Aufruf: prender.sh <scene_built.html> <out.mp4> <dauer> [N=4] [fps=30]   (4 Teile: auf 4 Kernen gemessen ~20 % schneller als 3)
 set -e
-html="$1"; out="$2"; dur="$3"; N="${4:-3}"; FPS="${5:-30}"
+html="$1"; out="$2"; dur="$3"; N="${4:-4}"; FPS="${5:-30}"
 tmp="$(dirname "$out")/.parts"; mkdir -p "$tmp"; rm -f "$tmp"/*
 frames=$(python3 -c "print(round($dur*$FPS))")
 per=$(( (frames + N - 1) / N ))

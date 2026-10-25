@@ -38,7 +38,9 @@ def score(text, heard):
     for a, b in UNITS: heard = re.sub(a, ' ' + b + ' ', heard)
     got = words(heard)
     if not want: return 1.0
-    return sum(1 for w in want if difflib.get_close_matches(w, got, n=1, cutoff=.75)) / len(want)
+    # auch Wortteile zählen: Whisper schreibt „Kola-Tempo“ gern zusammen („Kohlatempo“)
+    parts = got + [x[i:i + n] for x in got for n in (4, 5, 6) for i in range(max(0, len(x) - n + 1)) if len(x) > n + 2]
+    return sum(1 for w in want if difflib.get_close_matches(w, got, n=1, cutoff=.75) or (len(w) >= 4 and difflib.get_close_matches(w, parts, n=1, cutoff=.8))) / len(want)
 
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
 model = ChatterboxMultilingualTTS.from_pretrained(device='cpu')
