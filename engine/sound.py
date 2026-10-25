@@ -2,6 +2,7 @@
 # Aufruf: python3 sound.py <projektordner>   (liest sound.json, schreibt music.wav und sfx.wav)
 # sound.json: { "dur": 30.2, "bpm": 96, "seed": 3, "chords": [[57,60,64,69], ...], "pulse_from": 3.3, "pulse_to": 28,
 #               "events": [ {"t": 0.0, "type": "riser", "gain": .35, "pan": .5, "d": .5}, ... ] }
+# Titelmelodie: {"t": .., "type": "motif", "gain": .25} – zweimal (Start, Eula-Urteil)
 # Erkennungs-Sound: {"t": .., "type": "eula", "gain": .3} – genau zweimal pro Video (erster Eula-Auftritt, Pointe)
 import json, os, sys, wave
 import numpy as np
@@ -99,7 +100,15 @@ def eula():
     c = np.clip(tt - .16, 0, None); on = (tt >= .16)
     coin = sum(a * np.sin(2 * np.pi * fr * c) * np.exp(-c * k) for fr, a, k in ((2350, .5, 14), (3810, .35, 18), (5240, .22, 24), (6900, .1, 30))) * on * .5
     return hoot + coin
-GEN = {'eula': eula, 'whoosh': whoosh, 'boom': boom, 'shimmer': shimmer, 'pop': pop, 'riser': riser, 'reverse': reverse, 'swipe': swipe, 'glitch': glitch, 'scratch': scratch, 'tick': tick, 'wind': wind}
+def motif():
+    # Titelmelodie des Kanals (4 Töne, ca. 1,1 s): kommt in jedem Video zweimal (Start und Eula-Urteil), immer gleich
+    out = np.zeros(int(1.15 * SR))
+    for k, (f, at) in enumerate(((784, 0), (988, .18), (1175, .36), (1568, .56))):
+        n = int((.55 if k == 3 else .3) * SR); tt = np.arange(n) / SR
+        x = (np.sin(2 * np.pi * f * tt) + .4 * np.sin(4 * np.pi * f * tt) + .15 * np.sin(6 * np.pi * f * tt)) * np.exp(-tt * (4 if k == 3 else 9)) * np.clip(tt / .005, 0, 1)
+        s0 = int(at * SR); out[s0:s0 + n] += x[:len(out) - s0] * .32
+    return out
+GEN = {'motif': motif, 'eula': eula, 'whoosh': whoosh, 'boom': boom, 'shimmer': shimmer, 'pop': pop, 'riser': riser, 'reverse': reverse, 'swipe': swipe, 'glitch': glitch, 'scratch': scratch, 'tick': tick, 'wind': wind}
 
 sfx = np.zeros((2, N))
 for ev in C['events']:

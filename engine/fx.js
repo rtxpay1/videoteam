@@ -178,3 +178,41 @@ function commentCTA(t, t0, x, y, o = {}) {
   for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(-70 + i * 70, -10 - Math.max(0, Math.sin(k * 8 - i)) * 14, 18, 0, 7); g.fillStyle = '#2a7bff'; g.fill(); }
   g.restore();
 }
+
+// Rate-mal-Frage: drei Antwort-Karten (A/B/C) ploppen nacheinander auf (ab t0, ca. 3 s sichtbar).
+// Später löst reveal() auf: die richtige Karte leuchtet grün, die anderen werden grau.
+//   quiz(t, ph('Rate mal'), ['Eiffelturm', 'Everest', 'bis zum Mond'], { y: 1000 })
+//   quiz(t, ph('Auflösung'), [...], { y: 1000, right: 1, reveal: true })
+function quiz(t, t0, opts, o = {}) {
+  const k = t - t0, end = o.dur ?? 3.2;
+  if (k < 0 || k > end) return;
+  const out = clamp((end - k) / .3), y0 = o.y ?? 1000, cols = ['#36e8ff', '#ffd23f', '#ff4fd8'];
+  opts.forEach((s, i) => {
+    const ki = popIn((k - i * .18) / .35); if (ki <= 0) return;
+    const y = y0 + i * 150, right = o.reveal && i === o.right, wrong = o.reveal && i !== o.right && k > .5;
+    g.save(); g.globalAlpha *= out * (wrong ? .45 : 1); g.translate(540, y); g.scale(ki * (right && k > .5 ? 1 + Math.sin(k * 10) * .03 + .06 : 1), ki);
+    g.shadowColor = right && k > .5 ? 'rgba(93,255,168,.9)' : 'rgba(0,0,0,.5)'; g.shadowBlur = right && k > .5 ? 50 : 20;
+    g.beginPath(); g.roundRect(-400, -58, 800, 116, 30); g.fillStyle = right && k > .5 ? '#1f8a4c' : wrong ? '#3a3a44' : 'rgba(14,18,48,.92)'; g.fill();
+    g.shadowBlur = 0; g.lineWidth = 6; g.strokeStyle = right && k > .5 ? '#5dffa8' : cols[i]; g.stroke();
+    g.beginPath(); g.arc(-330, 0, 38, 0, 7); g.fillStyle = cols[i]; g.fill();
+    text('ABC'[i], -330, 3, 48, 'IDB', '#0b0e24');
+    text(s, -260, 3, 52, 'IDB', '#fff', { align: 'left' });
+    if (right && k > .5) text('✓', 340, 3, 64, 'IDB', '#fff');
+    g.restore();
+  });
+}
+// Eula-Urteil: Stempel knallt schräg aufs Bild (Markenzeichen am Ende jeder Folge), bleibt bis Videoende.
+//   verdict(t, ph('Urteil'), 'Überlebens-Chance', 2)   -> „GETESTET“ + „Überlebens-Chance: 2/10“
+function verdict(t, t0, label, score, o = {}) {
+  const k = t - t0; if (k < 0) return;
+  const hit = k < .22 ? 2.6 - eo(k / .22) * 1.6 : 1 + Math.sin(Math.min(1, (k - .22) / .3) * Math.PI) * .06;
+  g.save(); g.translate(o.x ?? 540, o.y ?? 560); g.rotate(-.12); g.scale(hit, hit); g.globalAlpha *= clamp(k / .1);
+  const red = '#ff2a4a';
+  g.lineWidth = 14; g.strokeStyle = red; g.shadowColor = 'rgba(255,42,74,.6)'; g.shadowBlur = 30;
+  g.beginPath(); g.roundRect(-380, -150, 760, 300, 26); g.stroke();
+  g.shadowBlur = 0; g.lineWidth = 5; g.beginPath(); g.roundRect(-356, -126, 712, 252, 16); g.stroke();
+  text('GETESTET', 0, -45, 120, 'IDB', red, { ls: 6 });
+  text(`${label}: ${score}/10`, 0, 70, 56, 'IDB', '#fff', { stroke: 10, strokeColor: red });
+  g.restore();
+  if (k < .3) { g.save(); g.globalAlpha = (1 - k / .3) * .35; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.restore(); }
+}
