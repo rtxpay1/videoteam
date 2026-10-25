@@ -97,6 +97,9 @@ function snowShot(cp, look, o = {}) {
   if (!A) setup3d();
   A.glow.material.opacity = .35 + .25 * Math.sin(o.t * 4) + (o.glow || 0);
   A.cam.position.set(...cp); A.cam.lookAt(...look); draw3d(A);
+  // Schneefall (2D), gleiche Flocken bei jedem Render; läuft über die Videolänge in einer Schleife
+  const T0 = o.t % TIMING.dur; g.fillStyle = 'rgba(255,255,255,.85)';
+  for (let i = 0; i < 70; i++) { const sp = 60 + (i * 37) % 90, x = ((i * 157) % W) + Math.sin(T0 * 1.3 + i) * 20, y = ((i * 263 + T0 * sp) % (H + 40)) - 20; g.beginPath(); g.arc(x, y, 3 + (i % 4), 0, 7); g.fill(); }
 }
 // Schacht-Ansicht: Kamera in Tiefe y (negativ), Bohrkopf darunter
 function shaftShot(t, y, o = {}) {
@@ -249,7 +252,7 @@ SC[11] = t => {   // Zeitraffer: Tag und Nacht rasen vorbei, Jahre zählen bis 1
   big('IM KOLA-TEMPO', 1430, 84, '#ffd23f', kin(11, .3)(t));
 };
 SC[12] = t => {   // Pointe und Schleife: zurück zu Eula am Loch, Kamera fährt zur Startposition
-  const u = t - S_[12][0], fr = ph('einzigen Frage'), k = eio(p(t, S_[12][0], END));
+  const u = t - S_[12][0], fr = ph('einzigen Frage'), k = eio(p(t, S_[12][0], TIMING.dur));   // Kamera fährt bis zum letzten Bild
   bg(SKY); stars(t, .2);
   A || setup3d();
   A.eula.pose(t, { mood: t < fr ? 'point' : t < END - .5 ? 'happy' : 'idle', dir: 1, look: [.6, -.6], k: t < END - .5 ? eo(p(t, S_[12][0], S_[12][0] + .3)) : 1 - eo(p(t, END - .5, END - .1)) });

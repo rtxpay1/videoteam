@@ -12,11 +12,12 @@ import json, subprocess, sys
 d, A, B = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
 D = json.load(open(f'{d}/timing.json'))['dur']
 out = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v', '-skip_frame', 'nokey', '-show_entries', 'frame=pts_time', '-of', 'csv=p=0', f'{d}/motion.mp4'], capture_output=True, text=True).stdout
-keys = sorted(float(x) for x in out.split() if x.strip())
+keys = sorted(float(x.split(',')[0]) for x in out.split() if x.split(',')[0].strip())
 a = max([k for k in keys if k <= A + 1e-3] or [0]); after = [k for k in keys if k >= B - 1e-3]; b = after[0] if after else D
 print(a, b)
 PY
 )"
+[ -n "$a" ] && [ -n "$b" ] || { echo "fix.sh: Schnittpunkte nicht gefunden"; exit 1; }
 echo "Neu gerendert wird $a bis $b s"
 START=$a node engine/render.js "$d/scene_built.html" "$d/.fix.mp4" "$b" 30
 python3 - "$d" "$a" "$b" <<'PY'
