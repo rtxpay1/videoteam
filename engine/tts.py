@@ -58,8 +58,10 @@ for i, raw in enumerate([l.strip() for l in sys.stdin if l.strip()], 1):
         if not asr: best = (1, wav, ''); break
         pcm = torchaudio.functional.resample(wav, model.sr, 16000)[0].numpy().astype('float32')   # direkt aus dem Speicher, ohne Datei
         heard = ' '.join(s.text for s in asr.transcribe(pcm, language='de', beam_size=1)[0])
-        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0)   # viel zu lang = Gestammel
-        if best is None or sc > best[0]: best = (sc, wav, heard)
+        # Abzug, wenn der Satz viel zu lang ist oder die Stimme Wörter dazuerfindet (Gestammel am Ende)
+        extra = len(words(heard)) - len(words(text))
+        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(3, len(words(text)) * .25) else 0)
+        if best is None or sc > best[0] or (sc == best[0] and wav.shape[-1] < best[1].shape[-1]): best = (sc, wav, heard)   # gleich gut: kürzer gewinnt
         if sc >= .85: break
         print(f'  s{i} Versuch {k + 1}: {sc:.2f} gehört: {heard.strip()}', flush=True)
     torchaudio.save(os.path.join(out, f's{i}.wav'), best[1], model.sr)

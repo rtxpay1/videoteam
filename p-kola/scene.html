@@ -19,7 +19,7 @@ const HOT = ph('fast doppelt'), DIVE = at(8, .75);
 window.CFG = {
   REPL: [['dreiundzwanzig Zentimeter', '23 Zentimeter'], ['Neunzehn Jahre', '19 Jahre'], ['zwölf Kilometer', '12 Kilometer'], ['sechs Kilometer', '6 Kilometer'], ['hundertachtzig Grad', '180 Grad'], ['neunzehnhundertzweiundneunzig', '1992'], ['null Komma zwei Prozent', '0,2 Prozent'], ['hundert Kilometern', '100 Kilometern'], ['über tausend Grad', 'über 1000 Grad'], ['fünftausend Grad', '5000 Grad'], ['zehntausend Jahre', '10.000 Jahre']],
   LOOP: true, DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
-  KEY: /^(tiefste|Loch|weiterbohrst|Kola|23|19|12|Marianengraben|Everest|versteinerte|Meereswesen|6|180|doppelt|Knete|1992|Schluss|0,2|Erdmittelpunkt|weiter|100|Erdmantel|1000|glühen|Erdkern|5000|Sonne|10.000|Frage)/,
+  KEY: /^(tiefste|Loch|weiterbohrst|Kola|23|19|12|Marianengraben|Everest|versteinerte|Meereswesen|6|180|doppelt|Knete|1992|Schluss|0,2|Erdmittelpunkt|weiter|100|Erdmantel|1000|glüht|Erdkern|5000|Sonne|10.000|Frage)/,
   split: t => 24 * (1 - p(t, 0, .6)) + 24 * p(t, TIMING.dur - .6, TIMING.dur) + 26 * Math.max(0, 1 - Math.abs(t - DIVE) / .3) + 14 * Math.max(0, 1 - Math.abs(t - HOT) / .3),
   shake: t => (t > DIVE && t < DIVE + .7 ? 18 * (1 - (t - DIVE) / .7) : 0) + (t > HOT && t < HOT + .5 ? 10 * (1 - (t - HOT) / .5) : 0) + (t > S_[9][0] && t < S_[10][0] ? 2 + 2 * Math.sin(t * 23) : 0),
 };
