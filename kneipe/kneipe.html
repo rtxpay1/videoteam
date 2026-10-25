@@ -972,16 +972,36 @@ details.script pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family
     await S.db.doc('config/scout').set({ scores: prof.sc, approved: decided.filter(i => i.status === 'approved').map(i => i.title), rejected: decided.filter(i => i.status === 'rejected').map(i => i.title), updatedAt: Date.now() });
   }
   const newPid = () => 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  // Projekt und alle Aufgaben gleichzeitig speichern, damit nichts halb angelegt bleibt, wenn die Seite schnell geschlossen wird
-  async function startProject(short, prompt, pid = newPid()) {
-    const now = Date.now();
+  // Projekt und Aufgaben nacheinander speichern (jeweils mit Wiederholung). Fehlt danach doch etwas, ergänzt healProjects() es beim nächsten Öffnen.
+  async function startProject(short, prompt, pid = newPid(), now = Date.now()) {
     const p = { v: 5, title: short, prompt, format: '9:16 · 60–70 s', createdAt: now };
     S.projects.set(pid, { id: pid, ...p });
-    await Promise.all([
-      S.db ? S.db.collection('projects').doc(pid).set(p) : null,
-      ...STEPS.map((s, k) => saveTask({ id: `${pid}-${s.key}`, projectId: pid, step: k + 1, stepKey: s.key, title: `${short}: ${s.title}`, detail: s.detail, agentId: s.agentId, priority: 2, status: 'open', createdAt: now, updatedAt: now })),
-    ]);
+    if (S.db) await dbWrite(() => S.db.collection('projects').doc(pid).set(p));
+    await addMissingTasks(pid, short, now);
     return pid;
+  }
+  async function addMissingTasks(pid, short, now) {
+    for (const [k, s] of STEPS.entries()) {
+      const id = `${pid}-${s.key}`;
+      if (S.tasks.has(id)) continue;
+      await saveTask({ id, projectId: pid, step: k + 1, stepKey: s.key, title: `${short}: ${s.title}`, detail: s.detail, agentId: s.agentId, priority: 2, status: 'open', createdAt: now, updatedAt: now });
+    }
+  }
+  // Selbstheilung: freigegebene Idee ohne Projekt, oder neues Projekt mit fehlenden Aufgaben -> nachlegen
+  const HEALING = new Set();
+  async function healProjects() {
+    if (!S.db || !S.loaded || S.loaded.size < 3) return;
+    for (const idea of S.ideas.values()) {
+      // nur frische Freigaben (letzte 2 Tage), damit alte, absichtlich gelöschte Projekte nicht wiederkommen
+      if (idea.status !== 'approved' || !idea.projectId || HEALING.has(idea.projectId) || !(idea.decidedAt > Date.now() - 2 * 86400e3)) continue;
+      const pr = S.projects.get(idea.projectId);
+      if (pr && pr.v !== 5) continue;
+      HEALING.add(idea.projectId);
+      try {
+        if (!pr) await startProject(idea.title, `${idea.title}\n${idea.pitch || ''}${idea.kapoNote ? '\nKapo: ' + idea.kapoNote : ''}`, idea.projectId, idea.decidedAt || Date.now());
+        else await addMissingTasks(pr.id, pr.title, pr.createdAt);
+      } catch (e) { console.warn('Nachlegen fehlgeschlagen', e); HEALING.delete(idea.projectId); }
+    }
   }
 
   const mb = b => b ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : '';
@@ -1089,7 +1109,15 @@ details.script pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family
     S.agents.set(id, a); render();
     if (S.db) await S.db.collection('agents').doc(id).set(a);
   }
-  async function saveTask(t) { const { id, ...body } = t; S.tasks.set(id, t); render(); if (S.db) await S.db.collection('tasks').doc(id).set(body); }
+  // Datenbank-Schreiben mit Wiederholung: die Datenbank lehnt zu viele Schreibvorgänge auf einmal ab (resource_exhausted)
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function dbWrite(fn) {
+    for (let i = 0; ; i++) {
+      try { return await fn(); }
+      catch (e) { if (i >= 5 || !['resource_exhausted', 'unavailable'].includes(e && e.code)) throw e; await sleep(400 * 2 ** i + Math.random() * 300); }
+    }
+  }
+  async function saveTask(t) { const { id, ...body } = t; S.tasks.set(id, t); render(); if (S.db) await dbWrite(() => S.db.collection('tasks').doc(id).set(body)); }
   async function deleteTask(id) { S.tasks.delete(id); render(); if (S.db) await S.db.collection('tasks').doc(id).delete(); }
   let chain = Promise.resolve();
   function log(text) {
@@ -1116,13 +1144,13 @@ details.script pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family
           // Erst die Freigabe speichern (das zählt), dann das Projekt anlegen
           const pid = newPid(), upd = { ...idea, status: 'approved', decidedAt: Date.now(), projectId: pid }; delete upd.id;
           S.ideas.set(idea.id, { id: idea.id, ...upd }); renderIdeas();
-          if (S.db) await S.db.collection('ideas').doc(idea.id).set(upd);
+          if (S.db) await dbWrite(() => S.db.collection('ideas').doc(idea.id).set(upd));
           await startProject(idea.title, `${idea.title}\n${idea.pitch || ''}${idea.kapoNote ? '\nKapo: ' + idea.kapoNote : ''}`, pid);
           log(`Idee freigegeben: ${idea.title}. Das Team legt los.`); saveScoutProfile().catch(() => {});
         } else {
           const upd = { ...idea, status: 'rejected', decidedAt: Date.now() }; delete upd.id;
           S.ideas.set(idea.id, { id: idea.id, ...upd }); renderIdeas();
-          if (S.db) await S.db.collection('ideas').doc(idea.id).set(upd);
+          if (S.db) await dbWrite(() => S.db.collection('ideas').doc(idea.id).set(upd));
           log(`Idee verworfen: ${idea.title}`); saveScoutProfile().catch(() => {});
         }
         render();
@@ -1199,11 +1227,12 @@ details.script pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family
     S.db = db; S.live = true;
     const off = err => { console.warn(err); S.live = false; S.db = null; render(); };
     db.collection('agents').onSnapshot(s => { S.agents = new Map(s.docs.filter(d => IDS.includes(d.id)).map(d => [d.id, d.data()])); render(); }, off);
-    db.collection('tasks').onSnapshot(s => { S.tasks = new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }]).filter(([, t]) => IDS.includes(t.agentId))); render(); }, off);
+    S.loaded = new Set(); const loaded = k => { S.loaded.add(k); healProjects(); };
+    db.collection('tasks').onSnapshot(s => { S.tasks = new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }]).filter(([, t]) => IDS.includes(t.agentId))); render(); loaded('tasks'); }, off);
     const toMap = s => new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
-    db.collection('projects').onSnapshot(s => { S.projects = toMap(s); renderProjects(); }, off);
+    db.collection('projects').onSnapshot(s => { S.projects = toMap(s); renderProjects(); loaded('projects'); }, off);
     db.collection('files').onSnapshot(s => { S.files = toMap(s); renderProjects(); }, off);
-    db.collection('ideas').onSnapshot(s => { S.ideas = toMap(s); render(); }, off);
+    db.collection('ideas').onSnapshot(s => { S.ideas = toMap(s); render(); loaded('ideas'); }, off);
     db.doc('status/render').onSnapshot(s => { S.render = s.exists ? s.data() : null; plateTick = 0; }, off);
     db.doc('config/house').onSnapshot(s => {
       const d = s.exists ? s.data() : {};
