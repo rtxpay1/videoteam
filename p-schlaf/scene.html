@@ -101,13 +101,14 @@ SC[0] = t => {   // Hook: Nacht, Eula hellwach im Bett, Wecker tickt
 SC[1] = t => {   // 24 Stunden: Uhr-Ring füllt sich, daneben ein Glas, das vollläuft (= 1 Promille)
   const u = t - S_[1][0], pm = ph('Promille'), k = eio(p(t, S_[1][0] + .1, pm));
   bg([[0, '#ff9a3a'], [1, '#c83a5a']]);
-  g.save(); g.lineWidth = 46; g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.arc(540, 760, 280, 0, 7); g.stroke();
+  g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283 + u * .5; g.fillStyle = 'rgba(255,255,255,.06)'; g.beginPath(); g.moveTo(540, 760); g.lineTo(540 + Math.cos(a) * 1800, 760 + Math.sin(a) * 1800); g.lineTo(540 + Math.cos(a + .15) * 1800, 760 + Math.sin(a + .15) * 1800); g.fill(); } g.restore();
+  g.save(); g.translate(540, 760); g.scale(1 + .03 * Math.sin(u * 6), 1 + .03 * Math.sin(u * 6)); g.translate(-540, -760); g.lineWidth = 46; g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.arc(540, 760, 280, 0, 7); g.stroke();
   g.strokeStyle = '#ffffff'; g.beginPath(); g.arc(540, 760, 280, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); g.stroke(); g.restore();
-  for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 - Math.PI / 2, on = i / 24 < k; g.fillStyle = on ? '#ffd23f' : 'rgba(255,255,255,.4)'; g.beginPath(); g.arc(540 + Math.cos(a) * 200, 760 + Math.sin(a) * 200, on ? 12 : 7, 0, 7); g.fill(); }
+  for (let i = 0; i < 24; i++) { const a = i / 24 * 6.283 - Math.PI / 2 + (k >= 1 ? u * .4 : 0), on = i / 24 < k; g.fillStyle = on ? '#ffd23f' : 'rgba(255,255,255,.4)'; g.beginPath(); g.arc(540 + Math.cos(a) * 200, 760 + Math.sin(a) * 200, on ? 12 : 7, 0, 7); g.fill(); }
   big(Math.round(24 * k) + ' h', 760, 150, '#ffffff', kin(1, .02)(t));
   const gk = eio(p(t, pm, pm + 1.2)), gx = 540, gy = 1330;
   if (gk > 0) { g.save(); g.globalAlpha = clamp(gk * 3); g.strokeStyle = '#ffffff'; g.lineWidth = 10; g.beginPath(); g.moveTo(gx - 90, gy - 240); g.lineTo(gx - 70, gy); g.lineTo(gx + 70, gy); g.lineTo(gx + 90, gy - 240); g.stroke();
-    g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(gx - 70 - 20 * (1 - gk) * 0 + 4, gy - 4); g.lineTo(gx + 66, gy - 4); g.lineTo(gx + 66 + 20 * gk, gy - 4 - 220 * gk); g.lineTo(gx - 66 - 20 * gk, gy - 4 - 220 * gk); g.fill();
+    g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(gx - 70 - 20 * (1 - gk) * 0 + 4, gy - 4); g.lineTo(gx + 66, gy - 4); for (let x = 66 + 20 * gk; x >= -66 - 20 * gk; x -= 8) g.lineTo(gx + x, gy - 4 - 220 * gk + Math.sin(x * .05 + u * 7) * 8); g.fill();
     for (let i = 0; i < 8; i++) { const bx = gx - 50 + (i * 37) % 100, by = gy - 20 - ((u * 120 + i * 40) % (220 * gk + 1)); g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(bx, by, 5, 0, 7); g.fill(); } g.restore(); }
   big('= 1 ‰', 300, 150, '#ffffff', p(t, pm + .2, pm + .55), { glow: 'rgba(255,255,255,.5)' });
 };
@@ -195,7 +196,8 @@ SC[10] = t => {   // 14 Stunden Schlaf im Zeitraffer: Mond und Sonne ziehen am F
 SC[11] = t => {   // Warnung: rotes Warnschild schlägt ein, Pokal wird durchgestrichen
   const u = t - S_[11][0], gn = ph('Guinness');
   bg([[0, '#ff3a4a'], [1, '#5a0a1a']]);
-  const k = eback(clamp(p(t, S_[11][0] + .1, S_[11][0] + .5)));
+  g.save(); g.globalAlpha = .12; g.fillStyle = '#000'; for (let i = -4; i < 14; i++) { const x = ((i * 160 + u * 140) % 2240) - 300; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 80, 0); g.lineTo(x - 520, H); g.lineTo(x - 600, H); g.fill(); } g.restore();
+  const k = eback(clamp(p(t, S_[11][0] + .1, S_[11][0] + .5))) * (1 + .05 * Math.sin(u * 5));
   g.save(); g.translate(540, 760); g.scale(k, k); g.rotate(Math.sin(u * 3) * .03); g.fillStyle = '#ffd23f'; g.strokeStyle = '#1a0a0a'; g.lineWidth = 18; g.lineJoin = 'round';
   g.beginPath(); g.moveTo(0, -260); g.lineTo(250, 190); g.lineTo(-250, 190); g.closePath(); g.fill(); g.stroke(); g.fillStyle = '#1a0a0a'; g.fillRect(-18, -120, 36, 190); g.beginPath(); g.arc(0, 125, 24, 0, 7); g.fill(); g.restore();
   const pk = eback(clamp(p(t, gn, gn + .4))); if (pk > 0) { g.save(); g.translate(540, 1240); g.scale(pk, pk); g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(-90, -110); g.lineTo(90, -110); g.lineTo(60, 10); g.lineTo(-60, 10); g.fill(); g.fillRect(-15, 10, 30, 60); g.fillRect(-60, 70, 120, 24);
