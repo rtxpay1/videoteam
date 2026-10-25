@@ -15,11 +15,11 @@ const S_ = TIMING.sentences, NS = S_.length;
 const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
 const END = S_[NS - 1][1] + .2;
 const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [Infinity])[0];   // Startzeit des Teilsatzes mit diesem Wort
-const BLACKOUT = ph('Dein Gehirn'), H264 = ph('zweihundertvierundsechzig');
+const H264 = ph('Zweihundertvierundsechzig');
 window.CFG = {
-  REPL: [['vierundzwanzig Stunden', '24 Stunden'], ['ein Promille', '1 Promille'], ['siebzehn Jahre', '17 Jahre'], ['elf Tage', '11 Tage'], ['zweihundertvierundsechzig Stunden', '264 Stunden'], ['vierzehn Stunden', '14 Stunden']],
+  REPL: [['vierundzwanzig Stunden', '24 Stunden'], ['einem Promille', 'einem Promille'], ['siebzehnjähriger', '17-jähriger'], ['elf Tage', '11 Tage'], ['Zweihundertvierundsechzig Stunden', '264 Stunden'], ['vierzehn Stunden', '14 Stunden'], ['zwei bis drei Wochen', '2 bis 3 Wochen']],
   LOOP: true, DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
-  KEY: /^(Woche|schläfst|24|Promille|Alkohol|Unheimliches|Gehirn|Sekunden|Sekundenschlaf|Abfallstoffe|Müll|vierten|Dinge|Randy|Gardner|17|11|264|übel|vergaß|Bett|14|gut|nachmachen|gefährlich|Nacht|morgen)/,
+  KEY: /^(Woche|schläfst|24|Promille|Alkohol|Gehirn|Sekunden|Abfallstoffe|Müll|vierten|Dinge|17|Randy|Gardner|11|264|Wach-Rekord|vergaß|Flipper|14|fit|nachmachen|Ratten|2|3|Wochen|versinken)/,
   split: t => 22 * (1 - p(t, 0, .6)) + 22 * p(t, TIMING.dur - .6, TIMING.dur) + 26 * Math.max(0, 1 - Math.abs(t - S_[5][0] - .3) / .4) + 18 * Math.max(0, 1 - Math.abs(t - H264) / .3),
   shake: t => (t > H264 && t < H264 + .6 ? 14 * (1 - (t - H264) / .6) : 0) + (t > S_[5][0] && t < S_[6][0] ? 3 + 3 * Math.sin(t * 17) : 0),
 };
@@ -99,7 +99,7 @@ SC[0] = t => {   // Hook: Nacht, Eula hellwach im Bett, Wecker tickt
   big('7 TAGE WACH?', 270, 120, '#ffd23f', p(t, .25, .6), { glow: 'rgba(255,210,60,.6)' });
 };
 SC[1] = t => {   // 24 Stunden: Uhr-Ring füllt sich, daneben ein Glas, das vollläuft (= 1 Promille)
-  const u = t - S_[1][0], pm = ph('Promille'), k = eio(p(t, S_[1][0] + .1, pm));
+  const u = t - S_[1][0], pm = at(1, .5), k = eio(p(t, S_[1][0] + .1, pm));
   bg([[0, '#ff9a3a'], [1, '#c83a5a']]);
   g.save(); g.globalCompositeOperation = 'lighter'; for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283 + u * .5; g.fillStyle = 'rgba(255,255,255,.06)'; g.beginPath(); g.moveTo(540, 760); g.lineTo(540 + Math.cos(a) * 1800, 760 + Math.sin(a) * 1800); g.lineTo(540 + Math.cos(a + .15) * 1800, 760 + Math.sin(a + .15) * 1800); g.fill(); } g.restore();
   g.save(); g.translate(540, 760); g.scale(1 + .03 * Math.sin(u * 6), 1 + .03 * Math.sin(u * 6)); g.translate(-540, -760); g.lineWidth = 46; g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.arc(540, 760, 280, 0, 7); g.stroke();
@@ -112,26 +112,17 @@ SC[1] = t => {   // 24 Stunden: Uhr-Ring füllt sich, daneben ein Glas, das voll
     for (let i = 0; i < 8; i++) { const bx = gx - 50 + (i * 37) % 100, by = gy - 20 - ((u * 120 + i * 40) % (220 * gk + 1)); g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(bx, by, 5, 0, 7); g.fill(); } g.restore(); }
   big('= 1 ‰', 300, 150, '#ffffff', p(t, pm + .2, pm + .55), { glow: 'rgba(255,255,255,.5)' });
 };
-SC[2] = t => {   // Gehirn in 3D funkt, dann Aussetzer: Licht geht für Sekunden aus
-  if (!BR) setup3d();
-  const u = t - S_[2][0], off = t > BLACKOUT ? ((t - BLACKOUT) % 1.1 < .45 ? 1 : 0) : 0;
-  bg([[0, '#2a1a5a'], [1, '#0a0820']]); stars(t, .5);
-  BR.brain.rotation.set(.2, u * .5, 0); BR.sparks.forEach(m => { m.visible = !off && Math.sin(t * 9 + m.userData.ph) > .2; });
-  BR.cam.position.set(Math.sin(u * .4) * 2, 1.5, 15 - u * .5); BR.cam.lookAt(0, 0, 0); draw3d(BR);
-  if (off) { g.fillStyle = 'rgba(0,0,10,.86)'; g.fillRect(0, 0, W, H); }
-  big('TAG 2', 280, 130, '#7af0ff', kin(2, .02)(t), { glow: 'rgba(120,240,255,.5)' });
-};
-SC[3] = t => {   // Sekundenschlaf: Eula nickt weg, Augenlider-Balken schließen sich, Zzz
-  const u = t - S_[3][0], nod = Math.max(0, Math.sin(u * 2.4));
+SC[2] = t => {   // Sekundenschlaf: Eula nickt weg, Augenlider-Balken schließen sich, Zzz
+  const u = t - S_[2][0], nod = Math.max(0, Math.sin(u * 2.4));
   bg(NIGHT); stars2d(t, .5);
   R || setup3d(); R.eula.pose(t, { mood: 'sleepy', lid: .35 + .6 * nod, k: 1 });
   roomShot(t, [2.2 + Math.sin(u * .5), 5, 8.5], [1.4, 4.2, 0], { hours: 30 + u });
   const lidH = H * .5 * Math.pow(nod, 3); g.fillStyle = '#05030f'; g.fillRect(0, 0, W, lidH); g.fillRect(0, H - lidH, W, lidH);
-  zzz(t, 700, 820, p(t, S_[3][0] + .3, S_[3][0] + .7));
+  zzz(t, 700, 820, p(t, S_[2][0] + .3, S_[2][0] + .7));
 };
-SC[4] = t => {   // Gehirn-Putz: blaue Spülung strömt durch das Gehirn, ohne Schlaf bleibt grauer Müll liegen
+SC[3] = t => {   // Gehirn-Putz: blaue Spülung strömt durch das Gehirn, ohne Schlaf bleibt grauer Müll liegen
   if (!BR) setup3d();
-  const u = t - S_[4][0], mu = ph('dieser Müll'), clean = t < mu;
+  const u = t - S_[3][0], mu = Infinity, clean = true;
   bg([[0, '#0a3a6a'], [1, '#04102a']]);
   BR.brain.rotation.set(.3, -.6 + u * .3, 0); BR.sparks.forEach(m => m.visible = false);
   BR.cam.position.set(-3 + u * .5, 2, 13); BR.cam.lookAt(0, 0, 0); draw3d(BR);
@@ -139,7 +130,18 @@ SC[4] = t => {   // Gehirn-Putz: blaue Spülung strömt durch das Gehirn, ohne S
   for (let i = 0; i < 90; i++) { const f = ((u * .35 + i / 90) % 1), y = 520 + (i % 9) * 100 + Math.sin(f * 9 + i) * 30, x = clean ? -60 + f * 1200 : 300 + (i * 97) % 480 + Math.sin(u * 2 + i) * 6;
     g.fillStyle = clean ? `rgba(90,200,255,${.55 * Math.sin(f * Math.PI)})` : `rgba(110,100,90,${.85 * p(t, mu, mu + .6)})`; g.beginPath(); g.arc(x, clean ? y : 560 + ((i * 53) % 700), clean ? 10 : 12 + (i % 3) * 5, 0, 7); g.fill(); }
   g.restore();
-  big(clean ? 'GEHIRN-PUTZ' : 'MÜLL BLEIBT', 280, 110, clean ? '#7af0ff' : '#c8b8a8', clean ? kin(4, .02)(t) : p(t, mu, mu + .35));
+  big(clean ? 'GEHIRN-PUTZ' : 'MÜLL BLEIBT', 280, 110, clean ? '#7af0ff' : '#c8b8a8', clean ? kin(3, .02)(t) : p(t, mu, mu + .35));
+};
+SC[4] = t => {   // Gehirn in 3D funkt, dann Aussetzer: Licht geht für Sekunden aus
+  if (!BR) setup3d();
+  const u = t - S_[4][0], BO = at(4, .4), off = t > BO ? ((t - BO) % 1.1 < .35 ? 1 : 0) : 0;
+  bg([[0, '#3a3040'], [1, '#100c14']]); stars(t, .3);
+  BR.brain.rotation.set(.2, u * .5, 0); BR.sparks.forEach(m => { m.visible = !off && Math.sin(t * 9 + m.userData.ph) > .2; });
+  BR.cam.position.set(Math.sin(u * .4) * 2, 1.5, 15 - u * .5); BR.cam.lookAt(0, 0, 0); draw3d(BR);
+  // grauer Müll sammelt sich, Lichtpunkte fallen aus
+  for (let i = 0; i < 70; i++) { const kk = p(t, S_[4][0] + i * .03, S_[4][0] + .5 + i * .03); if (kk <= 0) continue; g.fillStyle = `rgba(120,110,100,${.8 * kk})`; g.beginPath(); g.arc(240 + (i * 97) % 600 + Math.sin(u * 2 + i) * 6, 620 + (i * 53) % 640, 10 + (i % 3) * 6, 0, 7); g.fill(); }
+  if (off) { g.fillStyle = 'rgba(0,0,10,.8)'; g.fillRect(0, 0, W, H); }
+  big('MÜLL', 280, 130, '#c8b8a8', kin(4, .02)(t));
 };
 SC[5] = t => {   // Tag 4: Halluzinationen, Raum wabert, Augen tauchen im Dunkeln auf
   const u = t - S_[5][0];
@@ -168,47 +170,47 @@ SC[7] = t => {   // 11 Tage: Kalender-Würfel stapeln sich in 3D, Zähler bis 26
   big(fmt(264 * eio(p(t, H264 - .2, H264 + .5))) + ' h', 300, 150, '#ffffff', p(t, H264 - .2, H264 + .1), { glow: 'rgba(255,255,255,.5)' });
 };
 SC[8] = t => {   // Folgen: Wörter zerfallen in Pixel, Fragezeichen poppen
-  const u = t - S_[8][0], vg = ph('er vergaß');
+  const u = t - S_[8][0], vg = S_[8][0] + .2, pb = ph('aber gegen');
   bg([[0, '#2a3a2a'], [1, '#0a140a']]);
   for (let i = 0; i < 7; i++) { const a = popIn(p(t, vg + i * .18, vg + .3 + i * .18)); if (a > 0) big('?', 560 + ((i * 263) % 700) - 350, 500 + ((i * 131) % 700), 140, ['#ffd23f', '#7dff6a', '#ff8ad0'][i % 3], a, { rot: Math.sin(t * 2 + i) * .3, from: 1.4 }); }
   g.save(); g.translate(540, 780); for (let i = 0; i < 3; i++) { const r = 120 + i * 50, a = u * (1.5 + i) * (i % 2 ? -1 : 1); g.strokeStyle = `rgba(150,255,150,${.5 - i * .12})`; g.lineWidth = 12; g.beginPath(); g.arc(0, 0, r, a, a + 4.2); g.stroke(); } g.restore();
-  big('TAG 11', 300, 130, '#ffffff', kin(8, .02)(t));
+  // Flipper: Kugel springt zwischen Pilzen, Flipperarme schlagen
+  const fk = p(t, pb - .2, pb + .3); if (fk > 0) { g.save(); g.globalAlpha = fk; g.fillStyle = '#1a0a3a'; g.fillRect(0, 0, W, H);
+    [[340, 640, '#ff5a8a'], [740, 640, '#7af0ff'], [540, 860, '#ffd23f']].forEach(([x, y, c], i) => { const hit = Math.max(0, Math.sin(t * 7 + i * 2)); g.fillStyle = c; g.beginPath(); g.arc(x, y, 70 + hit * 14, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 8; g.stroke(); });
+    const bx = 540 + Math.sin(t * 5.3) * 330, by = 760 + Math.sin(t * 3.7) * 260; g.fillStyle = '#e8eef8'; g.beginPath(); g.arc(bx, by, 34, 0, 7); g.fill();
+    [[-1, 330], [1, 750]].forEach(([s2, x]) => { const a = .35 - Math.max(0, Math.sin(t * 6 + s2)) * .8; g.save(); g.translate(x, 1240); g.rotate(s2 * a); g.fillStyle = '#ff3a5a'; g.beginPath(); g.roundRect(s2 > 0 ? -170 : 0, -22, 170, 44, 22); g.fill(); g.restore(); });
+    g.restore(); }
+  big(fk > .5 ? 'FLIPPER: GEWONNEN' : 'TAG 11', 300, fk > .5 ? 92 : 130, fk > .5 ? '#ffd23f' : '#ffffff', fk > .5 ? p(t, pb + .1, pb + .4) : kin(8, .02)(t));
 };
-SC[9] = t => {   // Endlich ins Bett: Eula fliegt aufs Kissen, Lampe dimmt
-  const u = t - S_[9][0], k = eio(p(t, S_[9][0], S_[10][0] - .2));
-  bg(NIGHT); stars2d(t, .6);
-  R || setup3d(); R.eula.pose(t, { mood: k < .85 ? 'fly' : 'sleepy', lid: .8, k: 1 });
-  R.eula.position.set(lerp(-1.5, 1.6, k), lerp(5.5, 2.6, k) + Math.sin(k * Math.PI) * 1.5, lerp(2, -2.3, k)); R.eula.rotation.x = -k * .9;
-  roomShot(t, [5.5 - u * .3, 7.5, 18], [.6, 4, -1], { lamp: lerp(.6, .1, k), hours: 60 + u * .5 });
-  R.eula.position.set(1.4, 3.75, .2); R.eula.rotation.x = 0;
-  big('ENDLICH SCHLAFEN', 290, 96, '#b8c8ff', kin(9, .3)(t), { sc2: 'rgba(10,6,40,.85)' });
-};
-SC[10] = t => {   // 14 Stunden Schlaf im Zeitraffer: Mond und Sonne ziehen am Fenster vorbei, Wecker rast, Eula schläft
-  const u = t - S_[10][0], k = eio(p(t, S_[10][0], S_[11][0])), day = clamp(Math.sin(k * Math.PI) * 1.4);
+SC[9] = t => {   // 14 Stunden Schlaf im Zeitraffer: Mond und Sonne ziehen am Fenster vorbei, Wecker rast, Eula schläft
+  const u = t - S_[9][0], k = eio(p(t, S_[9][0], S_[10][0])), day = clamp(Math.sin(k * Math.PI) * 1.4);
   bg([[0, `rgb(${lerp(26, 120, day)},${lerp(16, 170, day)},${lerp(80, 255, day)})`], [1, '#0a0a2a']]);
   R || setup3d(); R.eula.pose(t, { mood: 'sleepy', lid: 1, k: 1 });
   R.eula.position.set(1.6, 2.6, -2.3); R.eula.rotation.x = -.9;
   roomShot(t, [4.5 + Math.sin(u * .4), 6.5, 14], [.4, 3.2, -1.8], { hours: 70 + k * 14, lamp: .1, moonX: -6.4 + ((k * 3) % 1) * 3.8, sky: day > .5 ? 0x7ac0ff : 0x0a1a4a });
   R.eula.position.set(1.4, 3.75, .2); R.eula.rotation.x = 0;
-  zzz(t, 640, 760, 1 - p(t, ph('und danach'), ph('und danach') + .4));
-  big(Math.round(14 * k) + ' h', 300, 150, '#ffffff', kin(10, .02)(t), { sc2: 'rgba(10,6,40,.85)' });
+  zzz(t, 640, 760, 1 - p(t, ph('und er war'), ph('und er war') + .4));
+  big(Math.round(14 * k) + ' h', 300, 150, '#ffffff', kin(9, .02)(t), { sc2: 'rgba(10,6,40,.85)' });
 };
-SC[11] = t => {   // Warnung: rotes Warnschild schlägt ein, Pokal wird durchgestrichen
-  const u = t - S_[11][0], gn = ph('Guinness');
+SC[10] = t => {   // Warnung: rotes Warnschild schlägt ein, Pokal wird durchgestrichen
+  const u = t - S_[10][0], gn = ph('In Versuchen');
   bg([[0, '#ff3a4a'], [1, '#5a0a1a']]);
   g.save(); g.globalAlpha = .12; g.fillStyle = '#000'; for (let i = -4; i < 14; i++) { const x = ((i * 160 + u * 140) % 2240) - 300; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 80, 0); g.lineTo(x - 520, H); g.lineTo(x - 600, H); g.fill(); } g.restore();
-  const k = eback(clamp(p(t, S_[11][0] + .1, S_[11][0] + .5))) * (1 + .05 * Math.sin(u * 5));
+  const k = eback(clamp(p(t, S_[10][0] + .1, S_[10][0] + .5))) * (1 + .05 * Math.sin(u * 5));
   g.save(); g.translate(540, 760); g.scale(k, k); g.rotate(Math.sin(u * 3) * .03); g.fillStyle = '#ffd23f'; g.strokeStyle = '#1a0a0a'; g.lineWidth = 18; g.lineJoin = 'round';
   g.beginPath(); g.moveTo(0, -260); g.lineTo(250, 190); g.lineTo(-250, 190); g.closePath(); g.fill(); g.stroke(); g.fillStyle = '#1a0a0a'; g.fillRect(-18, -120, 36, 190); g.beginPath(); g.arc(0, 125, 24, 0, 7); g.fill(); g.restore();
-  const pk = eback(clamp(p(t, gn, gn + .4))); if (pk > 0) { g.save(); g.translate(540, 1240); g.scale(pk, pk); g.fillStyle = '#ffcf3a'; g.beginPath(); g.moveTo(-90, -110); g.lineTo(90, -110); g.lineTo(60, 10); g.lineTo(-60, 10); g.fill(); g.fillRect(-15, 10, 30, 60); g.fillRect(-60, 70, 120, 24);
-    g.strokeStyle = '#ffffff'; g.lineWidth = 20; g.lineCap = 'round'; const sk = eo(p(t, gn + .4, gn + .7)); g.beginPath(); g.moveTo(-130, -130); g.lineTo(-130 + 260 * sk, -130 + 250 * sk); g.stroke(); g.restore(); }
+  const pk = eback(clamp(p(t, gn, gn + .4))); if (pk > 0) { g.save(); g.translate(540, 1200); g.scale(pk, pk); g.fillStyle = '#e8e0f0';   // Ratte als Silhouette
+    g.beginPath(); g.ellipse(0, 0, 120, 62, 0, 0, 7); g.fill(); g.beginPath(); g.ellipse(120, -20, 56, 40, -.3, 0, 7); g.fill(); g.beginPath(); g.arc(100, -62, 22, 0, 7); g.fill();
+    g.strokeStyle = '#e8e0f0'; g.lineWidth = 10; g.lineCap = 'round'; g.beginPath(); g.moveTo(-115, 10); g.quadraticCurveTo(-230, 40 + Math.sin(u * 4) * 20, -260, -40); g.stroke(); g.fillStyle = '#1a0a0a'; g.beginPath(); g.arc(140, -28, 8, 0, 7); g.fill(); g.restore(); }
+  big('2–3 WOCHEN', 300, 110, '#ffffff', p(t, gn + .5, gn + .85), { sc2: 'rgba(90,0,10,.85)' });
 };
-SC[12] = t => {   // Pointe und Schleife: zurück ins Schlafzimmer, Kamera fährt zur Startposition, Eula reißt die Augen auf
-  const fr = ph('sonst fragst'), k = eio(p(t, S_[12][0], TIMING.dur));
+SC[11] = t => {   // Pointe und Schleife: zurück ins Schlafzimmer, Kamera fährt zur Startposition, Eula reißt die Augen auf
+  const fr = ph('Dein Gehirn würde'), k = eio(p(t, S_[11][0], TIMING.dur));
   bg(NIGHT); stars2d(t, .6);
   R || setup3d(); R.eula.pose(t, { mood: t < fr ? 'sleepy' : 'idle', lid: .6, look: [0, .2], k: t < fr ? 1 : eo(p(t, fr, fr + .4)) });
   roomShot(t, camLerp(C1, C0, k), camLerp(L1, L0, k), { hours: (t % TIMING.dur) * .6 });
-  big('SCHLAF GUT', 270, 110, '#b8c8ff', kin(12, .05)(t), { alpha: 1 - p(t, fr, fr + .5), sc2: 'rgba(10,6,40,.85)' });
+    // grauer Müll steigt im Zimmer auf und verschwindet zur Schleife hin wieder
+  const mk = p(t, fr, fr + .8) * (1 - p(t, TIMING.dur - 1.2, TIMING.dur - .2)); for (let i = 0; i < 60; i++) { if (mk <= 0) break; g.fillStyle = `rgba(130,120,110,${.75 * mk})`; g.beginPath(); g.arc((i * 151) % W, H - ((i * 97 + (t - fr) * 160) % (H * .8)), 12 + (i % 4) * 5, 0, 7); g.fill(); }
 };
 function scene(t) {
   let i = 0; while (i < NS - 1 && t >= S_[i + 1][0]) i++;
