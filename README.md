@@ -8,6 +8,8 @@ Video-Produktionsteam „Zum Goldenen Token“: deutsche Erklär-Shorts (9:16, 1
 |---|---|
 | `engine/lib.js` | Grundgerüst jeder Szene: Untertitel, Übergänge, RGB-Split, Farbe, Korn, Dauerbewegung |
 | `engine/fx.js` | Effekt-Bibliothek (Morphing, Pixel-Zerfall, Iris, Split-Screen, 3D-Drehung, Strichzeichnung, Warp, Partikel, Diagramme, Parallax …) |
+| `engine/fx3d.js` | 3D-Baukasten im Hausstil „Goldener Token 3D“ (three.js): Low-Poly, Toon-Licht, Kontur; Planet, Mond, Felsen, Kristall, Ring, Papierstapel, Figur. Beispiel: `qa/demo3d.html` |
+| `engine/vendor/` | three.js 0.186.1 (MIT-Lizenz) |
 | `engine/tts.py` | Hausstimme „Karlsson euphorisch“ (Chatterbox Multilingual, MIT; Vorlage aus dem HUI-Korpus, CC0) |
 | `engine/timing.py` | Sprachspur + Satz-/Teilsatz-Zeiten, prüft die Länge 60–70 s |
 | `engine/sound.py`, `engine/mix.sh` | Musik und Effekte erzeugen, Endmix auf −14 LUFS |

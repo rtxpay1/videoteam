@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<!-- Testszene für den 3D-Hausstil: Planet mit Mond, Asteroid, Kristalle, wachsender Papierstapel -->
+<script>
+window.READY3D = new Promise(r => window.__ready3d = r);
+window.CFG = { DUR: 8, CUTS: [4], PHRASES: [[.3, 3.8, 'Das ist unser neuer 3D-Stil.'], [4.2, 7.6, 'Low-Poly, Toon-Licht und Kontur.']], CAP_END: 7.8, KEY: /^(3D-Stil|Low-Poly|Toon-Licht|Kontur)/ };
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script>
+let A = null, B = null;
+function setup() {
+  const F = window.FX3D;
+  A = F.stage(); A.planet = A.add(F.planet(4.2)); A.moon = A.add(F.moon(1.1)); A.rock = A.add(F.rock(.9, { seed: 5 })); A.ring = A.add(F.ring(6.2, .08));
+  A.crystals = [0x7af0ff, 0xff5ac8, 0xffd23f, 0x7dff6a].map((c, i) => A.add(F.crystal(c, .7)));
+  B = F.stage({ dist: 38 }); B.stack = B.add(F.paperStack(24, 4, 5.4, 1)); B.fig = B.add(F.figure(0xff5a8a)); B.ring = B.add(F.ring(4.5, .1, 0x7af0ff));
+}
+function scene(t) {
+  if (!A) setup();
+  if (t < 4) {
+    bg([[0, '#2a0a6a'], [.6, '#5a0a8a'], [1, '#ff3a7a']]); stars(t, .8); aurora(t, .6);
+    A.planet.rotation.set(.35, t * .5, .1); A.planet.position.set(0, .6 + Math.sin(t * 1.2) * .2, 0);
+    A.moon.position.set(Math.cos(t * 1.2) * 6.5, 1 + Math.sin(t * 1.2) * 1.4, Math.sin(t * 1.2) * 4); A.moon.rotation.y = t;
+    A.rock.position.set(-4 + t * 1.6, -5.5 + t * .6, 2); A.rock.rotation.set(t * 1.3, t * .9, 0);
+    A.ring.rotation.set(1.1 + Math.sin(t) * .05, .3, t * .2); A.ring.position.copy(A.planet.position);
+    A.crystals.forEach((c, i) => { const a = i * 1.57 + t * .6; c.position.set(Math.cos(a) * 3.8, -7 + Math.sin(t * 2 + i) * .4, Math.sin(a) * 3); c.rotation.y = t * 2 + i; });
+    A.cam.position.set(Math.sin(t * .3) * 4, 2 + Math.sin(t * .5), 40 - t * 2); A.cam.lookAt(0, 0, 0);
+    g.drawImage(FX3D.render(A), 0, 0, W, H);
+    big3('3D-STIL', 300, 150, '#ffd23f', p(t, .3, .7));
+  } else {
+    const u = t - 4, k = eio(p(u, 0, 3));
+    bg([[0, '#ffb07a'], [.5, '#ff6a8a'], [1, '#3a1a7a']]);
+    B.stack.scale.set(1, .5 + k * 9, 1); B.stack.position.set(-1.6, -6, 0); B.stack.rotation.y = -.5 + u * .25;
+    B.fig.position.set(2.6, -6, 1.5); B.fig.rotation.y = -.4 + Math.sin(u * 3) * .3; B.fig.position.y = -6 + Math.abs(Math.sin(u * 4)) * .5;
+    B.ring.position.set(-1.6, -6 + 9.5 * k * 1.05, 0); B.ring.rotation.set(1.5, 0, u);
+    B.cam.position.set(Math.sin(u * .4) * 8, 3 + u * 1.5, 38); B.cam.lookAt(0, -1 + u, 0);
+    g.drawImage(FX3D.render(B), 0, 0, W, H);
+    big3('LOW-POLY', 300, 140, '#ffffff', p(u, .1, .5));
+  }
+}
+function big3(s, y, size, col, k) { if (k > 0) text(s, 540, y, size, 'IDB', col, { alpha: clamp(k * 3), sc: lerp(1.9, 1, eback(k)), stroke: 10, strokeColor: 'rgba(10,6,30,.85)', ls: -3 }); }
+</script>
+</body></html>

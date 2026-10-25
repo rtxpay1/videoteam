@@ -65,18 +65,25 @@ function bg(stops, angle = 0) {
   const gr = angle ? g.createLinearGradient(0, 0, W, H) : g.createLinearGradient(0, 0, 0, H);
   stops.forEach(([o, c]) => gr.addColorStop(o, c)); g.fillStyle = gr; g.fillRect(0, 0, W, H);
 }
-// Polarlicht-Bänder für farbige Hintergründe
+// Polarlicht-Bänder für farbige Hintergründe. Gerechnet auf einer Fläche in Viertel-Auflösung
+// (Weichzeichner dort ist ca. 50× billiger) und weich hochskaliert.
+const AUR = document.createElement('canvas'); AUR.width = W / 4; AUR.height = H / 4;
+const AURX = AUR.getContext('2d'), AUR2 = document.createElement('canvas'); AUR2.width = W / 4; AUR2.height = H / 4;
+const AURX2 = AUR2.getContext('2d');
 function aurora(t, a, cols = [[255, 60, 200], [40, 230, 210], [120, 90, 255]]) {
-  g.save(); g.globalCompositeOperation = 'lighter';
+  AURX.setTransform(1, 0, 0, 1, 0, 0); AURX.clearRect(0, 0, AUR.width, AUR.height); AURX.scale(.25, .25);
+  AURX.globalCompositeOperation = 'lighter';
   cols.forEach((c, n) => {
     const y0 = 420 + n * 340, sp = .7 + n * .1, ph = n * 2;
     for (let k = 0; k < 3; k++) {
-      g.beginPath();
-      for (let x = -40; x <= W + 40; x += 30) { const y = y0 + Math.sin(x / 210 + t * sp + ph + k * .6) * 90 + Math.sin(x / 90 - t * sp * 1.7 + ph) * 26 + k * 34; x === -40 ? g.moveTo(x, y) : g.lineTo(x, y); }
-      g.strokeStyle = rgb(c, .10 * a); g.lineWidth = 70 - k * 18; g.filter = 'blur(18px)'; g.stroke();
+      AURX.beginPath();
+      for (let x = -40; x <= W + 40; x += 30) { const y = y0 + Math.sin(x / 210 + t * sp + ph + k * .6) * 90 + Math.sin(x / 90 - t * sp * 1.7 + ph) * 26 + k * 34; x === -40 ? AURX.moveTo(x, y) : AURX.lineTo(x, y); }
+      AURX.strokeStyle = rgb(c, .10 * a); AURX.lineWidth = 70 - k * 18; AURX.stroke();
     }
   });
-  g.restore(); g.filter = 'none';
+  // einmal weichzeichnen (statt pro Linie), dann hochskaliert dazumischen
+  AURX2.clearRect(0, 0, AUR2.width, AUR2.height); AURX2.filter = 'blur(4.5px)'; AURX2.drawImage(AUR, 0, 0); AURX2.filter = 'none';
+  g.save(); g.globalCompositeOperation = 'lighter'; g.imageSmoothingQuality = 'high'; g.drawImage(AUR2, 0, 0, W, H); g.restore();
 }
 const STARS = (() => { const r = rng(42); return Array.from({ length: 220 }, () => ({ x: r() * W, y: r() * H, s: .6 + r() * 2.4, ph: r() * 6.28, sp: .6 + r() * 2 })); })();
 function stars(t, a = 1, drift = 0) {
@@ -170,4 +177,4 @@ window.renderFrame = (t, frame) => {
   if (t < CFG.CAP_END) captions(t);
   finish(t, frame);
 };
-window.ready = document.fonts.ready.then(() => { setupCaptions(); return Promise.all(['IDB', 'IDX', 'IDS', 'IDM'].map(f => document.fonts.load(`40px ${f}`))); });
+window.ready = document.fonts.ready.then(() => { setupCaptions(); return Promise.all(['IDB', 'IDX', 'IDS', 'IDM'].map(f => document.fonts.load(`40px ${f}`)).concat(window.READY3D || [])); });   // READY3D: 3D-Baukasten (fx3d.js) geladen
