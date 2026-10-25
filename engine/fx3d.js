@@ -105,6 +105,99 @@ function figure(color = 0xff5a8a) {
   return grp;
 }
 
+// ---------- Maskottchen Eula ----------
+// Die Wissens-Eule des Kanals: rund (keine Facetten), rote Cappie mit goldenem Token, goldene Augen.
+// Benutzung:  const eu = st.add(FX3D.eula());  und in scene(t):  eu.pose(t, { mood: 'wave' })
+// Stimmungen: idle (schwebt leicht), wave (winkt), wow (staunt, Flügel hoch), point (zeigt zur Seite, dir: 1 rechts / -1 links),
+// fly (flattert), think (Flügel am Kinn, Blick nach oben), happy (Augen zu Lachbögen). Blinzeln läuft automatisch.
+// Weitere Optionen: look [x, y] (-1..1, Blickrichtung), blink false (aus), k (0..1, Stärke der Pose, für weiche Übergänge).
+const clamp01 = x => Math.min(1, Math.max(0, x)), mixv = (a, b, k) => a + (b - a) * k;
+function soft(color, o) { const m = toon(color, o); m.flatShading = false; return m; }
+function eulaFace(o) {
+  const grp = new THREE.Group(), black = new THREE.MeshBasicMaterial({ color: 0x140a24 }), white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const disc = (r, c, z, x = 0, y = 0) => { const m = new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshBasicMaterial({ color: c })); m.position.set(x, y, z); return m; };
+  // Auge: Augapfel mit Kontur, goldene Iris, Pupille, zwei Glanzpunkte, Lid und Wimpernlinie zum Blinzeln
+  const eyes = [-1, 1].map(s => {
+    const e = new THREE.Group(), r = o.eye, front = r * .62;
+    const w = solid(new THREE.SphereGeometry(r, 32, 20), white, .13); w.scale.set(1, 1.08, .62); e.add(w);
+    const look = new THREE.Group(); e.add(look);
+    look.add(disc(r * .62, 0xc87a10, front + .004), disc(r * .55, 0xffb81a, front + .006), disc(r * .33, 0x140a24, front + .008));
+    look.add(disc(r * .15, 0xffffff, front + .01, r * .2, r * .2), disc(r * .07, 0xffffff, front + .01, -r * .16, -r * .17));
+    const lid = new THREE.Mesh(new THREE.SphereGeometry(r * 1.16, 28, 16), new THREE.MeshBasicMaterial({ color: 0xf09a30 })); lid.visible = false; e.add(lid);
+    const lash = new THREE.Mesh(new THREE.TorusGeometry(r * .75, r * .07, 6, 20, Math.PI), black); lash.rotation.z = Math.PI; lash.position.set(0, r * .1, r * .8); lash.visible = false; e.add(lash);
+    const happy = new THREE.Mesh(new THREE.TorusGeometry(r * .6, r * .1, 6, 20, Math.PI), black); happy.position.set(0, -r * .2, r * .8); happy.visible = false; e.add(happy);
+    e.userData = { look, lid, lash, happy, r, s };
+    e.position.set(s * o.gap, o.ey, o.z); e.rotation.y = s * .12; grp.add(e); return e;
+  });
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(o.mouth, o.mouth * .22, 6, 12, Math.PI), black); smile.rotation.z = Math.PI; smile.position.set(0, o.my, o.z); grp.add(smile);
+  const open = new THREE.Mesh(new THREE.SphereGeometry(o.mouth * .8, 10, 8), new THREE.MeshBasicMaterial({ color: 0x5a0a20 })); open.scale.set(.9, 1.2, .3); open.position.set(0, o.my - o.mouth * .3, o.z); grp.add(open);
+  const cheeks = [-1, 1].map(s => { const c = new THREE.Mesh(new THREE.CircleGeometry(o.eye * .42, 20), new THREE.MeshBasicMaterial({ color: 0xff7aa0, transparent: true, opacity: .75 })); c.position.set(s * o.gap * 1.5, o.ey - o.eye * 1.15, o.z - .1); c.rotation.y = s * .45; grp.add(c); return c; });
+  grp.userData = { eyes, smile, open, cheeks };
+  return grp;
+}
+function eula() {
+  const grp = new THREE.Group(), rig = new THREE.Group(), S = (r, w = 28, h = 20) => new THREE.SphereGeometry(r, w, h); grp.add(rig);
+  // Körper mit eingefärbtem ovalem Bauch und hellem Gesichtskranz (Farbe pro Ecke, dadurch weiche Ränder)
+  const BS = new THREE.Vector3(1, 1.12, .9), onBody = (ph, th, r = 1.5) => new THREE.Vector3(-r * Math.cos(ph) * Math.sin(th), r * Math.cos(th), r * Math.sin(ph) * Math.sin(th)).multiply(BS);
+  const bgeo = S(1.5, 128, 96), bp = bgeo.attributes.position, bc = new Float32Array(bp.count * 3), cO = C(0xffa83a), cB = C(0xffe6b8), cF = C(0xffe2b4), cc = new THREE.Color();
+  for (let i = 0; i < bp.count; i++) {
+    const x = bp.getX(i), y = bp.getY(i), z = bp.getZ(i), d = Math.hypot(x / .95, (y + .62) / .82), dE = Math.min(Math.hypot(x - .55, y - .49), Math.hypot(x + .55, y - .49));
+    cc.copy(cO).lerp(cB, z > 0 ? clamp01((1.08 - d) / .1) : 0); if (z > 0) cc.lerp(cF, clamp01((.6 - dE) / .14)); bc.set([cc.r, cc.g, cc.b], i * 3);
+  }
+  bgeo.setAttribute('color', new THREE.BufferAttribute(bc, 3));
+  const body = solid(bgeo, soft(0xffffff, { vertexColors: true }), .035); body.scale.copy(BS); rig.add(body);
+  [[1.98, [-.3, 0, .3]], [2.22, [-.45, -.15, .15, .45]], [2.45, [-.3, 0, .3]]].forEach(([th, phs]) => phs.forEach(d => {
+    const pos = onBody(Math.PI / 2 + d, th, 1.53), fe = new THREE.Mesh(new THREE.TorusGeometry(.12, .028, 4, 10, Math.PI), new THREE.MeshBasicMaterial({ color: 0xe8a860 }));
+    fe.position.copy(pos); fe.lookAt(pos.clone().divide(BS).divide(BS).multiplyScalar(3)); fe.rotateZ(Math.PI); rig.add(fe);
+  }));
+  const face = eulaFace({ eye: .4, gap: .55, ey: .55, my: -.06, mouth: .13, z: 1.12 }); rig.add(face);
+  const beak = solid(new THREE.ConeGeometry(.17, .38, 12), soft(0xff6a2a), .06); beak.rotation.x = Math.PI / 2 + .35; beak.position.set(0, .2, 1.33); rig.add(beak);
+  // Federohren: je zwei spitze Federbüschel schräg über der Cappie
+  const ears = [-1, 1].map(s => {
+    const ear = new THREE.Group();
+    [[0, .95, .3, 0xe8862a], [s * .28, .65, .22, 0xffa83a]].forEach(([x, h, r, c], k) => { const fe = solid(new THREE.ConeGeometry(r, h, 14), soft(c), .07); fe.position.set(x, h / 2, k * .05); fe.rotation.z = -s * k * .35; ear.add(fe); });
+    ear.position.set(s * .95, 1.35, .1); ear.rotation.set(-.1, 0, -s * .62); rig.add(ear); return ear;
+  });
+  // rote Cappie mit goldenem Token
+  const cap = new THREE.Group(), red = soft(0xe8263a);
+  const crown = solid(new THREE.SphereGeometry(1.05, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), red, .04); crown.scale.set(1, .78, 1); cap.add(crown);
+  const brim = solid(new THREE.CylinderGeometry(.85, .85, .07, 28), soft(0xc81a2e), .06); brim.scale.set(1, 1, .8); brim.position.set(0, .02, .78); cap.add(brim);
+  const knob = solid(S(.11, 12, 8), red, .1); knob.position.y = .82; cap.add(knob);
+  const logo = solid(new THREE.CylinderGeometry(.24, .24, .06, 20), soft(0xffc93a, { emissive: 0xffa000, ei: .25 }), .1); logo.rotation.x = Math.PI / 2 - .25; logo.position.set(0, .28, .98); cap.add(logo);
+  cap.position.set(0, 1.18, 0); cap.rotation.set(-.08, 0, -.1); rig.add(cap);
+  const wings = [-1, 1].map(s => { const w = solid(S(.7, 20, 14), soft(0xe8862a), .05); w.scale.set(.35, 1, .6); w.position.y = -.6; const a = new THREE.Group(); a.add(w); a.position.set(s * 1.38, .1, 0); rig.add(a); return a; });
+  const feet = [-1, 1].map(s => { const ft = solid(S(.26, 16, 10), soft(0xff6a2a), .08); ft.scale.set(1.1, .45, 1.3); ft.position.set(s * .5, -1.68, .35); rig.add(ft); return ft; });
+
+  // Pose setzen: Flügelwinkel (z) pro Seite, Körperneigung, Hüpfen, Mimik
+  grp.pose = (t, o = {}) => {
+    const mood = o.mood || 'idle', k = o.k ?? 1, dir = o.dir || 1, U = face.userData;
+    let wl = -.25, wr = .25, bob = Math.sin(t * 2.2) * .08, tilt = Math.sin(t * 1.3) * .04, turn = 0, lean = 0, wowF = 0, happyF = 0, look = o.look || [0, 0], lift = 0;
+    if (mood === 'wave') { wr = 2.3 + Math.sin(t * 9) * .45; tilt = -.06; turn = -.25; }
+    if (mood === 'wow') { wl = -2.5 + Math.sin(t * 12) * .15; wr = 2.5 - Math.sin(t * 12) * .15; bob = Math.abs(Math.sin(t * 6)) * .35; tilt = Math.sin(t * 9) * .04; wowF = 1; }
+    if (mood === 'point') { if (dir > 0) wr = 1.45 + Math.sin(t * 5) * .06; else wl = -1.45 - Math.sin(t * 5) * .06; turn = dir * .35; look = o.look || [dir, .1]; }
+    if (mood === 'fly') { const fl = Math.sin(t * 16) * .9; wl = -1.6 - fl; wr = 1.6 + fl; lift = .6 + Math.sin(t * 4) * .25; bob = 0; lean = .25; }
+    if (mood === 'think') { wr = 2.05; tilt = .12; look = o.look || [.4, .8]; bob = Math.sin(t * 1.5) * .05; }
+    if (mood === 'happy') { happyF = 1; bob = Math.abs(Math.sin(t * 7)) * .22; wl = -.6 - Math.abs(Math.sin(t * 7)) * .4; wr = .6 + Math.abs(Math.sin(t * 7)) * .4; }
+    wings[0].rotation.z = mixv(-.25, wl, k); wings[1].rotation.z = mixv(.25, wr, k); wings[1].rotation.y = mood === 'think' ? mixv(0, -1.1, k) : 0;
+    rig.position.y = mixv(0, bob + lift, k); feet.forEach(f => f.rotation.x = mood === 'fly' ? mixv(0, .6, k) : 0);
+    rig.rotation.set(mixv(0, lean, k), mixv(0, turn, k), mixv(0, tilt, k));
+    ears.forEach((e, i) => e.rotation.z = -(i ? 1 : -1) * (.62 + Math.sin(t * 3 + i) * .05 + wowF * .2));
+    U.smile.visible = wowF * k < .5; U.open.visible = wowF * k >= .5;
+    // automatisches Blinzeln (zweimal kurz hintereinander alle paar Sekunden, gleiche Zeiten bei jedem Render)
+    const ph = (t + 1.3) % 3.7, bl = o.blink === false ? 0 : clamp01(Math.max(1 - Math.abs(ph - .1) / .1, 0));
+    U.eyes.forEach(e => {
+      const { lid, lash, happy, r } = e.userData, h = happyF * k > .5, b = h ? 0 : bl;
+      e.scale.setScalar(1 + wowF * k * .18);
+      e.userData.look.position.set(look[0] * r * .2 - e.userData.s * r * .06, look[1] * r * .2 - r * .04, 0);
+      lid.visible = b > .02 || h; lash.visible = b > .85; happy.visible = h;
+      const kk = h ? 1 : b; lid.scale.set(1, Math.max(kk, .02) * 1.08, .7); lid.position.y = r * 1.2 * (1 - kk);
+    });
+    return grp;
+  };
+  grp.pose(0);
+  return grp;
+}
+
 // Rendert die Bühne und gibt die durchsichtige 3D-Ebene zurück (zeichnen mit g.drawImage(ebene, 0, 0, 1080, 1920))
 // Die Pixel werden direkt ausgelesen und in eine normale 2D-Fläche kopiert: das ist mit Software-Grafik
 // viel schneller, als die WebGL-Fläche selbst ins Video-Canvas zu zeichnen.
@@ -119,5 +212,5 @@ function render(st) {
   octx.putImageData(IMG, 0, 0); return out;
 }
 
-window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, render, canvas: out, rng };
+window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng };
 if (window.__ready3d) window.__ready3d();
