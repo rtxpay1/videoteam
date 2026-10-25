@@ -93,8 +93,24 @@ function stars(t, a = 1, drift = 0) {
 // ---------- Untertitel ----------
 let CHUNKS = [];
 function setupCaptions() {
-  const WORDS = [];
-  CFG.PHRASES.forEach(([a, b, s]) => {
+  let WORDS = [];
+  const TW = typeof TIMING !== 'undefined' && TIMING.words;
+  if (TW && TW.length) {
+    // Genaue Wort-Zeiten aus der Spracherkennung (engine/words.py). Ersetzungen (REPL) über mehrere Wörter:
+    // die ersetzten Wörter teilen sich die Zeitspanne der Originalwörter.
+    WORDS = TW.map(([a, b, w]) => ({ w, a, b }));
+    (CFG.REPL || []).forEach(([x, y]) => {
+      const xs = x.split(' '), ys = y.split(' ');
+      for (let i = 0; i + xs.length <= WORDS.length; i++) {
+        const seg = WORDS.slice(i, i + xs.length), txt = seg.map(o => o.w).join(' ');
+        const m = txt.indexOf(x); if (m !== 0) continue;
+        const rest = txt.slice(x.length), A = seg[0].a, B = seg[seg.length - 1].b;
+        const rep = ys.map((w, k) => ({ w: w + (k === ys.length - 1 ? rest : ''), a: A + (B - A) * k / ys.length, b: A + (B - A) * (k + 1) / ys.length }));
+        WORDS.splice(i, xs.length, ...rep); i += ys.length - 1;
+      }
+      WORDS.forEach(o => { if (o.w.includes(x)) o.w = o.w.split(x).join(y); });   // Ersetzung innerhalb eines Wortes
+    });
+  } else CFG.PHRASES.forEach(([a, b, s]) => {
     (CFG.REPL || []).forEach(([x, y]) => { s = s.split(x).join(y); });
     const ws = s.split(' '), wt = ws.map(w => w.length + 2), tot = wt.reduce((x, y) => x + y, 0); let acc = a;
     ws.forEach((w, i) => { const d = (b - a) * wt[i] / tot; WORDS.push({ w, a: acc, b: acc + d }); acc += d; });
@@ -106,10 +122,12 @@ function setupCaptions() {
 // Untertitel: Wörter erscheinen einzeln, wenn sie gesprochen werden (Pop mit kleinem Überschwingen und Kipp-Wackler).
 // Farben: normale Wörter weiß, Schlüsselwörter gelb, das gerade gesprochene Wort grün (größer und mit Leuchten).
 function captions(t, y = 1560) {
-  const ci = CHUNKS.findIndex(c => t >= c[0].a - .05 && t < c[c.length - 1].b + .25); if (ci < 0) return; const ch = CHUNKS[ci];
+  // eine Wortgruppe bleibt kurz stehen, macht aber sofort Platz, sobald das nächste Wort gesprochen wird
+  const endOf = k => Math.min(CHUNKS[k][CHUNKS[k].length - 1].b + .25, k + 1 < CHUNKS.length ? CHUNKS[k + 1][0].a - .06 : Infinity);
+  const ci = CHUNKS.findIndex((c, k) => t >= c[0].a - .06 && t < endOf(k)); if (ci < 0) return; const ch = CHUNKS[ci];
   const size = 78; g.save(); g.font = `${size}px IDB`; g.textBaseline = 'middle';
   const widths = ch.map(w => g.measureText(w.w).width), sp = 40, total = widths.reduce((a, b) => a + b, 0) + sp * (ch.length - 1);
-  const out = p(t, ch[ch.length - 1].b + .1, ch[ch.length - 1].b + .25);
+  const out = p(t, endOf(ci) - .15, endOf(ci));
   let x = W / 2 - total / 2;
   ch.forEach((w, i) => {
     const k = p(t, w.a - .06, w.a + .16); if (k <= 0) { x += widths[i] + sp; return; }

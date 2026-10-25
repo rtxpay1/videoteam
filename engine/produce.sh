@@ -5,6 +5,8 @@ set -e
 cd /home/user/videoteam
 d="$1"; n="$2"
 python3 engine/timing.py "$d" > /dev/null
+# genaue Wort-Zeiten für die Untertitel (Spracherkennung)
+./tts-env/bin/python engine/words.py "$d"
 python3 "$d/sound_gen.py"
 python3 engine/sound.py "$d"
 bash engine/mix.sh "$d"
