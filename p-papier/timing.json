@@ -1,0 +1,165 @@
+{
+ "dur": 64.141,
+ "sentences": [
+  [
+   0.55,
+   5.258
+  ],
+  [
+   5.558,
+   9.472
+  ],
+  [
+   9.772,
+   14.711
+  ],
+  [
+   15.011,
+   18.336
+  ],
+  [
+   18.636,
+   23.226
+  ],
+  [
+   23.526,
+   27.855
+  ],
+  [
+   28.155,
+   32.261
+  ],
+  [
+   32.561,
+   38.55
+  ],
+  [
+   38.85,
+   41.097
+  ],
+  [
+   41.397,
+   46.331
+  ],
+  [
+   46.631,
+   55.209
+  ],
+  [
+   55.692,
+   62.341
+  ]
+ ],
+ "phrases": [
+  [
+   0.55,
+   1.18,
+   "Was wäre,"
+  ],
+  [
+   1.18,
+   5.258,
+   "wenn du ein ganz normales Blatt Papier zweiundvierzig Mal falten könntest?"
+  ],
+  [
+   5.558,
+   7.658,
+   "Wie dick wäre der Stapel dann?"
+  ],
+  [
+   7.658,
+   9.472,
+   "Die meisten schätzen ein paar Meter."
+  ],
+  [
+   9.772,
+   13.062,
+   "Ein Blatt ist etwa ein Zehntel Millimeter dick."
+  ],
+  [
+   13.062,
+   14.711,
+   "Und jede Faltung verdoppelt die Dicke."
+  ],
+  [
+   15.011,
+   18.336,
+   "Nach sieben Faltungen ist der Stapel so dick wie ein Schulheft."
+  ],
+  [
+   18.636,
+   22.626,
+   "Nach siebzehn Faltungen ist er schon dreizehn Meter hoch,"
+  ],
+  [
+   22.626,
+   23.226,
+   "so hoch wie ein Haus."
+  ],
+  [
+   23.526,
+   27.855,
+   "Nach dreiundzwanzig Faltungen überragt er das höchste Gebäude der Welt."
+  ],
+  [
+   28.155,
+   32.261,
+   "Und nach siebenundzwanzig Faltungen ragt er höher als jedes Flugzeug fliegt."
+  ],
+  [
+   32.561,
+   34.101,
+   "Und jetzt die Antwort:"
+  ],
+  [
+   34.101,
+   38.55,
+   "Nach zweiundvierzig Faltungen ist der Stapel über vierhunderttausend Kilometer hoch."
+  ],
+  [
+   38.85,
+   41.097,
+   "Damit reicht er weiter als bis zum Mond."
+  ],
+  [
+   41.397,
+   43.567,
+   "Warum klappt das nicht in echt?"
+  ],
+  [
+   43.567,
+   46.331,
+   "Weil das Papier bei jeder Faltung auch nur noch halb so groß ist."
+  ],
+  [
+   46.631,
+   50.621,
+   "Schon nach wenigen Faltungen ist es zu klein und zu dick."
+  ],
+  [
+   50.621,
+   53.491,
+   "Der Weltrekord liegt bei zwölf Faltungen,"
+  ],
+  [
+   53.491,
+   55.209,
+   "mit einem extrem langen Papierstreifen."
+  ],
+  [
+   55.692,
+   56.672,
+   "Und das zeigt,"
+  ],
+  [
+   56.672,
+   58.632,
+   "wie verrückt Verdoppeln ist:"
+  ],
+  [
+   58.632,
+   62.341,
+   "Mit nur neun Faltungen mehr würde der Stapel bis zur Sonne reichen."
+  ]
+ ]
+}
