@@ -15,4 +15,8 @@ done
 ./tts-env/bin/python -c "from chatterbox.mtl_tts import ChatterboxMultilingualTTS; ChatterboxMultilingualTTS.from_pretrained(device='cpu')"
 # Spracherkennung für die Satzprüfung vorladen
 ./tts-env/bin/python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+# System-Python braucht numpy für Musik, Effekte und Stillstand-Check (fehlte schon einmal und kostete 10 Minuten)
+python3 -c "import numpy" 2>/dev/null || python3 -m pip install -q numpy 2>/dev/null || python3 -m pip install -q --break-system-packages numpy
+# Zum Schluss alles prüfen: „Studio bereit.“ erscheint nur, wenn wirklich nichts fehlt
+bash engine/check.sh
 echo "Studio bereit."

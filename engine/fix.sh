@@ -5,6 +5,7 @@
 set -e
 cd /home/user/videoteam
 d="$1"; n="$2"
+bash engine/check.sh
 python3 engine/build.py "$d"
 # Schnittpunkte auf Schlüsselbilder von motion.mp4 legen (render.js setzt jede Sekunde eins), dann ohne Neukodieren austauschen
 read a b <<< "$(python3 - "$d" "$3" "$4" <<'PY'

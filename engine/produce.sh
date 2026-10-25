@@ -4,6 +4,9 @@
 set -e
 cd /home/user/videoteam
 d="$1"; n="$2"
+# Ende-Marke: $d/produce.exit enthält am Schluss den Exit-Code (0 = fertig). Darauf warten, nicht auf pgrep.
+rm -f "$d/produce.exit"; trap 'echo $? > "$d/produce.exit"' EXIT
+bash engine/check.sh
 python3 engine/timing.py "$d" > /dev/null
 # genaue Wort-Zeiten für die Untertitel (Spracherkennung)
 ./tts-env/bin/python engine/words.py "$d"
