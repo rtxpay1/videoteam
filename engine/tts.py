@@ -40,6 +40,19 @@ def cut_off(wav, sr):
     last = float(x[-n:].pow(2).mean().sqrt()); ref = float(x.pow(2).mean().sqrt()) + 1e-9
     return last > ref * .35
 
+def end_rise(wav, sr):
+    # Satzmelodie am Ende: Tonhöhe der letzten 15 % des Gesprochenen geteilt durch die Satzmitte.
+    # Aussagesätze sollen am Ende fallen (Wert unter 1); ab etwa 1.0 klingt das Ende hochgezogen oder abgehackt.
+    import numpy as np
+    x = wav[0]; hop = int(sr * .02); n = x.shape[-1] // hop
+    f0 = torchaudio.functional.detect_pitch_frequency(wav, sr, frame_time=.02, win_length=15, freq_low=90, freq_high=600)[0].numpy()
+    rms = np.array([float(x[i * hop:(i + 1) * hop].pow(2).mean().sqrt()) for i in range(n)])
+    m = min(len(f0), len(rms)); f0, rms = f0[:m], rms[:m]
+    idx = np.where((rms > rms.max() * .12) & (f0 > 90) & (f0 < 600))[0]
+    if len(idx) < 20: return 0.0
+    k = max(3, int(len(idx) * .15))
+    return float(np.median(f0[idx[-k:]]) / np.median(f0[idx[int(len(idx) * .4):-k]]))
+
 def score(text, heard):
     want = [w for w in words(text) if len(w) > 2 and not NUM.search(w)]
     heard = heard.lower()
@@ -76,7 +89,10 @@ for i, raw in enumerate([l.strip() for l in sys.stdin if l.strip()], 1):
         # Abzug, wenn die Endung fehlt: letztes Wort nicht gehört oder Aufnahme bricht mitten im Laut ab
         lastw = [w for w in words(text) if len(w) > 2][-1:] or words(text)[-1:]
         miss_end = bool(lastw) and not difflib.get_close_matches(lastw[0], words(heard)[-4:], n=1, cutoff=.7)
-        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(2, len(words(text)) * .2) else 0) - (.25 if miss_end or cut_off(wav, model.sr) else 0)
+        # Abzug, wenn ein Aussagesatz am Ende nicht fällt (klingt wie eine Frage oder abgebrochen)
+        rise = end_rise(wav, model.sr) if text.rstrip()[-1:] in '.!' else 0.0
+        if rise > 1.0: print(f'  s{i} Versuch {k + 1}: Satzende steigt ({rise:.2f})', flush=True)
+        sc = score(text, heard) - (.3 if dur > len(words(text)) * .7 + 1.5 else 0) - (.3 if extra > max(2, len(words(text)) * .2) else 0) - (.25 if miss_end or cut_off(wav, model.sr) else 0) - (.2 if rise > 1.0 else 0)
         if miss_end or cut_off(wav, model.sr): print(f'  s{i} Versuch {k + 1}: Endung abgeschnitten', flush=True)
         if best is None or sc > best[0] or (sc == best[0] and wav.shape[-1] < best[1].shape[-1]): best = (sc, wav, heard)   # gleich gut: kürzer gewinnt
         if sc >= .85: break
