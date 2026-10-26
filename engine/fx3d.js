@@ -9,6 +9,8 @@
 import * as THREE from './vendor/three.module.js';
 import { EXRLoader } from './vendor/jsm/loaders/EXRLoader.js';
 import { RoomEnvironment } from './vendor/jsm/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from './vendor/jsm/geometries/RoundedBoxGeometry.js';
+import { Sky } from './vendor/jsm/objects/Sky.js';
 
 const W = 1080, H = 1920;
 // Die 3D-Ebene wird in geringerer Auflösung gerechnet und hochskaliert (Software-Grafik ist langsam);
@@ -259,6 +261,114 @@ function eula() {
   return grp;
 }
 
+
+// ---------- Hochwertige Bausteine (statt nackter Kisten und Zylinder) ----------
+// Grundsatz: Hauptobjekte nie aus einer einzigen Grundform. Abgerundete Kanten, mehrere Teile, echtes Material,
+// ein Set mit Tiefe (vorne, Mitte, hinten, Nebel) und eine Kamera, die sich durch den Raum bewegt.
+
+// Kiste mit abgerundeten Kanten (r = Rundung). Fängt Licht an den Kanten und wirkt sofort hochwertiger als BoxGeometry.
+function rund(w, h, d, r = .15, mat = glanz(0xcccccc)) { return new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 4, Math.min(r, w / 2, h / 2, d / 2)), mat); }
+
+// Detailliertes Auto (ca. 4,4 lang, Front zeigt nach +x). Lack mit Klarlack, getönte Scheiben, Felgen mit Speichen,
+// Scheinwerfer, Rückleuchten, Spiegel, Türfugen. o.farbe, o.licht (0..1 Scheinwerfer).
+// Teile zum Animieren: auto.tuer (Fahrertür, dreht um ihre vordere Kante: auto.tuer.rotation.y), auto.scheibe (Seitenscheibe Fahrer,
+// auto.scheibe.visible = false nach dem Einschlagen), auto.raeder (dreht um z), auto.innen (Platz für Eula: auto.innen.add(eula)).
+function auto(o = {}) {
+  const g = new THREE.Group(), lack = glanz(o.farbe ?? 0xd8283c, { rau: .28, lack: 1 }), dunkel = glanz(0x1a1c24, { rau: .6, lack: 0 });
+  const glas = new THREE.MeshPhysicalMaterial({ color: 0x2a4a68, metalness: .2, roughness: .04, clearcoat: 1, transparent: true, opacity: o.glas ?? .5, depthWrite: false, side: THREE.DoubleSide });
+  const chrom = glanz(0xe8ecf4, { metall: 1, rau: .18 });
+  const unten = rund(4.4, .85, 2, .32, lack); unten.position.y = .78; g.add(unten);
+  const haube = rund(1.3, .3, 1.86, .14, lack); haube.position.set(1.45, 1.18, 0); haube.rotation.z = -.08; g.add(haube);
+  // Fahrgastraum: Dach plus vier Scheiben, innen offen
+  const dach = rund(2.2, .14, 1.7, .07, lack); dach.position.set(-.35, 2.02, 0); g.add(dach);
+  [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(([sx, sz]) => { const p = rund(.17, .84, .17, .07, lack); p.position.set(-.35 + sx * 1.02 + (sx > 0 ? -.12 : .05), 1.62, sz * .8); p.rotation.z = sx > 0 ? .38 : -.2; g.add(p); });
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(1.75, 1.0), glas); front.position.set(.75, 1.62, 0); front.rotation.set(0, Math.PI / 2, .38); g.add(front);
+  const heck = new THREE.Mesh(new THREE.PlaneGeometry(1.7, .9), glas); heck.position.set(-1.42, 1.6, 0); heck.rotation.set(0, -Math.PI / 2, -.2); g.add(heck);
+  const seite = z => { const m = new THREE.Mesh(new THREE.PlaneGeometry(2.0, .72), glas); m.position.set(-.35, 1.6, z); if (z < 0) m.rotation.y = Math.PI; g.add(m); return m; };
+  seite(-.86); const scheibeF = seite(.86);
+  // Chromleiste unter den Fenstern und Fensterrahmen: Glas liest sich als Glas
+  [-.9, .9].forEach(z => { const l = rund(2.3, .05, .05, .02, chrom); l.position.set(-.3, 1.22, z); g.add(l); const t = rund(2.1, .05, .05, .02, chrom); t.position.set(-.35, 1.97, z); g.add(t); });
+  const innenR = rund(2.0, .5, 1.6, .1, dunkel); innenR.position.set(-.4, 1.1, 0); g.add(innenR);
+  // Fahrertür (vorne links, zur Kamera): eigene Gruppe mit Drehpunkt an der vorderen Kante
+  const tuer = new THREE.Group(); tuer.position.set(.6, 0, 1.0); g.add(tuer);
+  const tb = rund(1.5, .8, .08, .04, lack); tb.position.set(-.75, .8, .02); tuer.add(tb);
+  const griff = rund(.28, .06, .06, .03, chrom); griff.position.set(-1.25, 1.02, .08); tuer.add(griff);
+  const fuge = new THREE.Mesh(new THREE.BoxGeometry(.02, .78, .02), dunkel); fuge.position.set(-.05, .8, .07); tuer.add(fuge);
+  const fuge2 = fuge.clone(); fuge2.position.x = -1.48; tuer.add(fuge2);
+  // Räder: Reifen, Felge, 5 Speichen, Radkasten
+  const raeder = [[1.35, 1], [1.35, -1], [-1.35, 1], [-1.35, -1]].map(([x, s]) => {
+    const r = new THREE.Group(); r.position.set(x, .45, s * .95);
+    const reifen = new THREE.Mesh(new THREE.TorusGeometry(.34, .13, 12, 32), glanz(0x15161a, { rau: .85, lack: 0 })); r.add(reifen);
+    const felge = new THREE.Mesh(new THREE.CylinderGeometry(.27, .27, .14, 32), chrom); felge.rotation.x = Math.PI / 2; r.add(felge);
+    for (let k = 0; k < 5; k++) { const sp = rund(.05, .44, .05, .02, dunkel); sp.rotation.z = k * Math.PI * 2 / 5; sp.position.z = s * .08; r.add(sp); }
+    const nabe = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .18, 16), chrom); nabe.rotation.x = Math.PI / 2; r.add(nabe);
+    g.add(r); return r;
+  });
+  // Lichter, Grill, Stoßstangen, Spiegel
+  const scheinw = new THREE.MeshStandardMaterial({ color: 0xfff6d8, emissive: 0xfff2c0, emissiveIntensity: o.licht ?? .8 });
+  [-1, 1].forEach(s => {
+    const l = rund(.12, .2, .42, .06, scheinw); l.position.set(2.18, .98, s * .62); g.add(l);
+    const r = rund(.1, .18, .38, .05, new THREE.MeshStandardMaterial({ color: 0xff2030, emissive: 0xc00010, emissiveIntensity: .6 })); r.position.set(-2.19, 1.0, s * .65); g.add(r);
+    const sp = rund(.26, .14, .1, .04, lack); sp.position.set(.62, 1.42, s * 1.05); g.add(sp);
+  });
+  const grill = rund(.08, .22, 1.0, .05, dunkel); grill.position.set(2.2, .82, 0); g.add(grill);
+  [2.22, -2.22].forEach(x => { const b = rund(.16, .2, 2.02, .08, dunkel); b.position.set(x, .5, 0); g.add(b); });
+  const innen = new THREE.Group(); innen.position.set(-.1, 1.2, .1); g.add(innen);
+  g.tuer = tuer; g.scheibe = scheibeF; g.raeder = raeder; g.innen = innen; g.lack = lack;
+  return g;
+}
+
+// Wasseroberfläche mit echten Wellen (Gitter, Höhe aus mehreren Sinuswellen) und Spiegelung der Lichtstimmung.
+// w × d Fläche, o.farbe, o.tiefe (Deckkraft 0..1). Pro Bild: wasser.welle(t, staerke)
+function wasser(w = 40, d = 40, o = {}) {
+  const geo = new THREE.PlaneGeometry(w, d, 96, 96); geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshPhysicalMaterial({ color: o.farbe ?? 0x0e3c5a, roughness: .22, metalness: 0, clearcoat: 0, specularIntensity: o.spiegel ?? .35, transparent: true, opacity: o.tiefe ?? .92, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: o.spiegel ?? .35 });
+  const m = new THREE.Mesh(geo, mat), pos = geo.attributes.position, base = Float32Array.from(pos.array);
+  m.welle = (t, a = 1) => {
+    for (let i = 0; i < pos.count; i++) {
+      const x = base[i * 3], z = base[i * 3 + 2];
+      pos.array[i * 3 + 1] = a * (.18 * Math.sin(x * .55 + t * 1.6) + .12 * Math.sin(z * .7 - t * 1.3) + .06 * Math.sin((x + z) * 1.6 + t * 2.7) + .03 * Math.sin(x * 3.1 - z * 2.3 + t * 4));
+    }
+    pos.needsUpdate = true; geo.computeVertexNormals(); return m;
+  };
+  return m.welle(0);
+}
+// Aufsteigende Luftblasen (glänzend, durchsichtig). Bereich [bx, by, bz] um den Ursprung, n Stück. Pro Bild: blasen.steigen(t)
+function blasen(n = 60, b = [6, 8, 4], seed = 5) {
+  const r = rng(seed), geo = new THREE.SphereGeometry(1, 16, 12), mat = new THREE.MeshPhysicalMaterial({ color: 0xdff4ff, roughness: .02, clearcoat: 1, transparent: true, opacity: .5, depthWrite: false });
+  const m = new THREE.InstancedMesh(geo, mat, n), P = Array.from({ length: n }, () => ({ x: (r() - .5) * b[0], y: r() * b[1], z: (r() - .5) * b[2], s: .04 + r() * .14, v: .8 + r() * 1.6, ph: r() * 6.28 })), M = new THREE.Matrix4();
+  m.steigen = t => { P.forEach((q, i) => { const y = (q.y + t * q.v) % b[1], w = Math.sin(t * 3 + q.ph) * .15; M.makeScale(q.s * (1 + w * .3), q.s * (1 - w * .3), q.s); M.setPosition(q.x + Math.sin(t * 2 + q.ph) * .2, y - b[1] / 2, q.z); m.setMatrixAt(i, M); }); m.instanceMatrix.needsUpdate = true; return m; };
+  return m.steigen(0);
+}
+// Echter Himmel (Sonnenstand, Dunst) als Hintergrund der Bühne. o.sonne [Höhe in Grad, Richtung in Grad], o.dunst
+function himmel(st, o = {}) {
+  const sky = new Sky(); sky.scale.setScalar(4000); const u = sky.material.uniforms;
+  u.turbidity.value = o.dunst ?? 4; u.rayleigh.value = o.rayleigh ?? 1.6; u.mieCoefficient.value = .005; u.mieDirectionalG.value = .8;
+  const [hoehe, richtung] = o.sonne || [12, 200], phi = THREE.MathUtils.degToRad(90 - hoehe), th = THREE.MathUtils.degToRad(richtung);
+  u.sunPosition.value.setFromSphericalCoords(1, phi, th); st.scene.add(sky); st.kino = true; st.himmel = sky; return sky;
+}
+// Nebel für Tiefe: Dinge weiter hinten verblassen in der Farbe (Unterwasser: blau, Himmel: hellblau)
+function nebel(st, farbe = 0x8fb8d8, nah = 20, fern = 120) { st.scene.fog = new THREE.Fog(farbe, nah, fern); return st; }
+// Kamerafahrt wie im Film: Stationen [{ t, pos: [x,y,z], ziel: [x,y,z], fov }] werden weich verbunden,
+// dazu ein leichtes Handkamera-Atmen (o.hand, Standard .05). Pro Bild: FX3D.kamera(stage, t, stationen)
+function kamera(st, t, keys, o = {}) {
+  let i = 0; while (i < keys.length - 1 && t >= keys[i + 1].t) i++;
+  const a = keys[i], b = keys[Math.min(i + 1, keys.length - 1)], k0 = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 0;
+  const k = k0 < .5 ? 4 * k0 ** 3 : 1 - (-2 * k0 + 2) ** 3 / 2, L = (u, v) => u.map((x, j) => x + (v[j] - x) * k), h = o.hand ?? .05;
+  const p = L(a.pos, b.pos), z = L(a.ziel || [0, 0, 0], b.ziel || a.ziel || [0, 0, 0]);
+  st.cam.position.set(p[0] + Math.sin(t * 1.3) * h, p[1] + Math.sin(t * 1.7 + 1) * h, p[2]); st.cam.lookAt(z[0], z[1], z[2]);
+  const fov = (a.fov ?? st.cam.fov) + ((b.fov ?? a.fov ?? st.cam.fov) - (a.fov ?? st.cam.fov)) * k; if (fov !== st.cam.fov) { st.cam.fov = fov; st.cam.updateProjectionMatrix(); }
+  return st;
+}
+// Boden mit weichem Verlauf zum Horizont (Gras, Sand, Asphalt, Seegrund). o.farbe, o.rand, r = Radius
+function boden(r = 60, o = {}) {
+  const geo = new THREE.CircleGeometry(r, 64, 0, Math.PI * 2); geo.rotateX(-Math.PI / 2);
+  const c1 = C(o.farbe ?? 0x6a8a4a), c2 = C(o.rand ?? 0x3a4a5a), pos = geo.attributes.position, col = new Float32Array(pos.count * 3), cc = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) { const d = Math.hypot(pos.getX(i), pos.getZ(i)) / r; cc.copy(c1).lerp(c2, Math.min(1, d * 1.3)); col.set([cc.r, cc.g, cc.b], i * 3); }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9 }));
+}
+
 // Rendert die Bühne und gibt die durchsichtige 3D-Ebene zurück (zeichnen mit g.drawImage(ebene, 0, 0, 1080, 1920))
 // Die Pixel werden direkt ausgelesen und in eine normale 2D-Fläche kopiert: das ist mit Software-Grafik
 // viel schneller, als die WebGL-Fläche selbst ins Video-Canvas zu zeichnen.
@@ -274,5 +384,5 @@ function render(st) {
   octx.putImageData(IMG, 0, 0); return out;
 }
 
-window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng, licht, glanz, schatten };
+window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng, licht, glanz, schatten, rund, auto, wasser, blasen, himmel, nebel, kamera, boden };
 envLaden.then(() => { if (window.__ready3d) window.__ready3d(); });
