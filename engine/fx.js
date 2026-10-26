@@ -216,3 +216,83 @@ function verdict(t, t0, label, score, o = {}) {
   g.restore();
   if (k < .3) { g.save(); g.globalAlpha = (1 - k / .3) * .35; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.restore(); }
 }
+
+// ---------- Lebendige Hintergründe (Agent „Kulisse“) ----------
+// Mehrere Ebenen, die sich unterschiedlich schnell bewegen, damit nie ein Bild stillsteht.
+// Zuerst im Hintergrund zeichnen, danach Szene und Eula darüber:
+//   lebendig(t, 'himmel')   Wolken in 3 Ebenen, Vögel, Lichtstrahlen
+//   lebendig(t, 'weltall')  Sterne mit Parallaxe, Nebel, Sternschnuppen
+//   lebendig(t, 'wasser')   Lichtmuster, aufsteigende Blasen, Fischschwärme
+//   lebendig(t, 'innen')    Staub im Licht, Lichtkegel, weiche Lichtpunkte
+//   lebendig(t, 'stadt')    Häuser in 2 Ebenen, blinkende Fenster, fahrende Lichter
+// Optionen: { a: Deckkraft (1), speed: Tempo (1), col: Grundfarbe, kein: true = Himmel/Grund nicht füllen }
+const LEB = (() => { const r = rng(77); return Array.from({ length: 140 }, () => ({ x: r(), y: r(), z: .3 + r() * .7, s: r(), p: r() * 6.283 })); })();
+function lebendig(t, art, o = {}) {
+  const a = o.a ?? 1, v = (o.speed ?? 1) * t;
+  g.save(); g.globalAlpha *= a;
+  const wrap = (x, m) => ((x % m) + m) % m;
+  if (art === 'himmel') {
+    if (!o.kein) { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, o.col || '#3a8fe0'); gr.addColorStop(1, '#bfe4ff'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+    // Lichtstrahlen, die langsam wandern
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 5; k++) { const x = wrap(200 + k * 260 + v * 18, W + 400) - 200; g.fillStyle = `rgba(255,250,220,${.05 + .03 * Math.sin(v * .7 + k)})`; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 140, 0); g.lineTo(x + 420, H); g.lineTo(x + 220, H); g.fill(); }
+    g.restore();
+    // Wolken in drei Tiefen
+    LEB.slice(0, 18).forEach(c => { const sp = 20 + c.z * 70, w = 160 + c.z * 260, x = wrap(c.x * (W + w * 2) + v * sp, W + w * 2) - w, y = 120 + c.y * 1100;
+      g.fillStyle = `rgba(255,255,255,${.35 + c.z * .5})`; for (let k = 0; k < 4; k++) { g.beginPath(); g.ellipse(x + k * w * .22, y - Math.sin(k * 1.7) * w * .08, w * .28, w * .16, 0, 0, 7); g.fill(); } });
+    // Vögel
+    LEB.slice(20, 26).forEach(b => { const x = wrap(b.x * W + v * (90 + b.z * 60), W + 200) - 100, y = 200 + b.y * 500 + Math.sin(v * 2 + b.p) * 20, f = Math.sin(v * 9 + b.p) * 10;
+      g.strokeStyle = 'rgba(40,40,60,.7)'; g.lineWidth = 4; g.beginPath(); g.moveTo(x - 18, y - f); g.quadraticCurveTo(x - 8, y - 8, x, y); g.quadraticCurveTo(x + 8, y - 8, x + 18, y - f); g.stroke(); });
+  } else if (art === 'weltall') {
+    if (!o.kein) { g.fillStyle = o.col || '#070a1e'; g.fillRect(0, 0, W, H); }
+    // Nebel, der langsam atmet
+    for (let k = 0; k < 3; k++) { const x = W * (.3 + .4 * Math.sin(v * .05 + k * 2)), y = H * (.25 + k * .25), rr = 500 + 120 * Math.sin(v * .3 + k);
+      const gr = g.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, ['rgba(138,107,255,.28)', 'rgba(255,79,216,.2)', 'rgba(54,232,255,.18)'][k]); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - rr, y - rr, rr * 2, rr * 2); }
+    // Sterne mit Parallaxe und Funkeln
+    LEB.forEach(s => { const x = wrap(s.x * W - v * 30 * s.z, W), y = wrap(s.y * H + v * 12 * s.z, H), tw = .5 + .5 * Math.sin(v * 3 + s.p);
+      g.fillStyle = `rgba(255,255,255,${(.3 + .7 * s.z) * tw})`; g.fillRect(x, y, 2 + s.z * 3, 2 + s.z * 3); });
+    // Sternschnuppe alle paar Sekunden
+    const k = Math.floor(v / 2.6), f = (v / 2.6) % 1; if (f < .35) { const sx = (k * 397) % W, sy = 100 + (k * 211) % 700, d = f / .35;
+      const gr = g.createLinearGradient(sx + d * 600, sy + d * 300, sx + d * 600 - 220, sy + d * 300 - 110); gr.addColorStop(0, `rgba(255,255,255,${1 - d})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.strokeStyle = gr; g.lineWidth = 5; g.beginPath(); g.moveTo(sx + d * 600, sy + d * 300); g.lineTo(sx + d * 600 - 220, sy + d * 300 - 110); g.stroke(); }
+  } else if (art === 'wasser') {
+    if (!o.kein) { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, o.col || '#1d7fb8'); gr.addColorStop(1, '#06243e'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+    // Lichtmuster von der Oberfläche
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 26; k++) { const x = wrap(k * 97 + Math.sin(v * .8 + k) * 60, W), y = 60 + (k % 6) * 90 + Math.cos(v + k) * 20;
+      g.fillStyle = 'rgba(160,230,255,.08)'; g.beginPath(); g.ellipse(x, y, 90, 26, Math.sin(v * .5 + k) * .6, 0, 7); g.fill(); }
+    g.restore();
+    // Fischschwarm, der als Gruppe durchs Bild zieht
+    const sx = wrap(v * 80, W + 600) - 300, sy = 600 + Math.sin(v * .4) * 200;
+    LEB.slice(30, 52).forEach(f => { const x = sx + (f.x - .5) * 260 + Math.sin(v * 2 + f.p) * 10, y = sy + (f.y - .5) * 180;
+      g.fillStyle = 'rgba(10,40,70,.6)'; g.beginPath(); g.ellipse(x, y, 18, 7, 0, 0, 7); g.moveTo(x - 16, y); g.lineTo(x - 28, y - 8); g.lineTo(x - 28, y + 8); g.fill(); });
+    // Blasen steigen auf
+    LEB.slice(60, 100).forEach(b => { const y = wrap(b.y * H - v * (60 + b.z * 140), H + 40), x = b.x * W + Math.sin(v * 2 + b.p) * 12;
+      g.strokeStyle = `rgba(220,245,255,${.25 + b.z * .5})`; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 3 + b.z * 9, 0, 7); g.stroke(); });
+  } else if (art === 'innen') {
+    if (!o.kein) { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, o.col || '#3a2a4a'); gr.addColorStop(1, '#140c1c'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+    // Lichtkegel von oben, leicht schwankend
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const sw = Math.sin(v * .6) * 60; g.fillStyle = 'rgba(255,220,160,.07)'; g.beginPath(); g.moveTo(420 + sw, 0); g.lineTo(660 + sw, 0); g.lineTo(980, H); g.lineTo(100, H); g.fill();
+    // weiche Lichtpunkte (Bokeh)
+    LEB.slice(0, 22).forEach(b => { const x = wrap(b.x * W + v * 10 * b.z, W), y = b.y * H + Math.sin(v * .7 + b.p) * 30, rr = 30 + b.z * 70;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, `rgba(255,${180 + (b.s * 60) | 0},140,${.12 + .1 * Math.sin(v + b.p)})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x - rr, y - rr, rr * 2, rr * 2); });
+    g.restore();
+    // Staub, der im Licht treibt
+    LEB.slice(40, 120).forEach(d => { const x = wrap(d.x * W + Math.sin(v * .5 + d.p) * 40 + v * 8, W), y = wrap(d.y * H - v * 15 * d.z, H);
+      g.fillStyle = `rgba(255,240,210,${.2 + .4 * d.z})`; g.fillRect(x, y, 2 + d.z * 2, 2 + d.z * 2); });
+  } else if (art === 'stadt') {
+    if (!o.kein) { const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, o.col || '#1a1446'); gr.addColorStop(1, '#ff7a5a'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+    [[.35, '#2a2050', 900], [.7, '#16112e', 1100]].forEach(([z, c, base], li) => {
+      const off = v * 40 * z;
+      for (let k = -1; k < 12; k++) { const bw = 120 + ((k * 37 + li * 11) % 5) * 30, x = wrap(k * 140 - off, W + 300) - 150, h = 300 + ((k * 53 + li * 29) % 7) * 70;
+        g.fillStyle = c; g.fillRect(x, base - h + li * 300, bw, h + 900);
+        for (let wy = base - h + li * 300 + 30; wy < base + li * 300; wy += 46) for (let wx = x + 16; wx < x + bw - 20; wx += 34) {
+          const on = Math.sin(wx * 7.1 + wy * 3.3 + Math.floor(v * 1.5 + wx) * .9) > .2; if (on) { g.fillStyle = 'rgba(255,210,120,.75)'; g.fillRect(wx, wy, 16, 22); } } }
+    });
+    // fahrende Lichter unten
+    for (let k = 0; k < 10; k++) { const x = wrap(k * 160 + v * (180 + (k % 3) * 60) * (k % 2 ? 1 : -1), W + 100) - 50, y = 1680 + (k % 2) * 40;
+      g.fillStyle = k % 2 ? 'rgba(255,240,200,.9)' : 'rgba(255,70,70,.9)'; g.fillRect(x, y, 26, 8); }
+  }
+  g.restore();
+}
