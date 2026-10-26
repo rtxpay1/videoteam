@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<!-- Vorschau des neuen Looks (15 s): Übergänge zoom, form, wisch, schieben; Feder-Einblendungen nacheinander;
+     Eula mit Stauchen/Strecken, nachschwingenden Federn und Blick aufs Objekt; Glanz-Material mit Lichtstimmung studio und sunset;
+     weicher Bodenschatten; Hintergrund mit Tiefenschärfe; Kino-Farblook; Bewegungsunschärfe -->
+<script>
+window.LICHT3D = ['studio', 'sunset'];
+window.READY3D = new Promise(r => window.__ready3d = r);
+const TIMING = { dur: 15, bpm: 96, sentences: [[0, 3], [3, 6], [6, 9], [9, 12], [12, 15]], phrases: [[0, 15, ' ']] };
+window.CFG = { DUR: 15, CUTS: [3, 6, 9, 12], PHRASES: TIMING.phrases, CAP_END: 0, KEY: /^$/, LOOP: true,
+  UEBERGANG: ['zoom', { art: 'form', x: 540, y: 820 }, 'wisch', 'schieben'] };
+</script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+let A, B, C2, D;
+const draw3d = st => g.drawImage(FX3D.render(st), 0, 0, W, H);
+function setup() {
+  const F = FX3D, T = F.THREE;
+  // A: Eula springt, Schatten am Boden
+  A = F.stage({ dist: 15, fov: 30 }); A.eu = A.add(F.eula()); A.eu.position.set(0, -1.6, 0); A.sh = A.add(F.schatten(1.6, .55)); A.sh.position.set(0, -3.3, 0);
+  // B: Goldmünze im Studiolicht, Eula schaut sie an
+  B = F.licht(F.stage({ dist: 15, fov: 30 }), 'studio', { staerke: 2.2 });
+  B.coin = B.add(new T.Mesh(new T.CylinderGeometry(1.7, 1.7, .32, 64), F.glanz(0xffc23a, { metall: 1, rau: .38 })));
+  B.coin.position.set(0, 1.6, 0); B.eu = B.add(F.eula()); B.eu.scale.setScalar(.7); B.eu.position.set(-1.1, -2.3, 1);
+  B.sh = B.add(F.schatten(1.3, .5)); B.sh.position.set(-1.1, -3.5, 1);
+  // C: Planet im Hausstil, Eula fliegt
+  C2 = F.stage({ dist: 22 }); C2.pl = C2.add(F.planet(4)); C2.pl.position.y = 1.5; C2.eu = C2.add(F.eula()); C2.eu.scale.setScalar(.8); C2.eu.position.set(1.2, -4.1, 3);
+  // D: Lackkugel und Metallring im Abendlicht
+  D = F.licht(F.stage({ dist: 15, fov: 30 }), 'sunset');
+  D.ball = D.add(new T.Mesh(new T.SphereGeometry(1.6, 64, 40), F.glanz(0xe8263a, { rau: .18, lack: 1 }))); D.ball.position.set(0, 1.4, 0);
+  D.ring = D.add(new T.Mesh(new T.TorusGeometry(2.6, .18, 24, 96), F.glanz(0xd8dce8, { metall: 1, rau: .15 }))); D.ring.position.set(0, 1.4, 0);
+  D.eu = D.add(F.eula()); D.eu.scale.setScalar(.7); D.eu.position.set(1.3, -2.5, 1);
+}
+function label(s, t, t0, y = 260) {   // Wörter nacheinander, jedes mit Feder
+  const ws = s.split(' '); ws.forEach((w, i) => { const k = nach(t, t0, i, .09, .55); if (k > 0) text(w, 540, y + i * 110, 96, 'IDB', i % 2 ? '#ffd23f' : '#ffffff', { alpha: clamp(k * 4), sc: lerp(.4, 1, spring(k)), stroke: 12, strokeColor: 'rgba(10,6,30,.85)' }); });
+}
+const SC = [];
+SC[0] = t => {
+  lebendig(t, 'himmel', { unscharf: 8 });
+  A.eu.pose(t, { mood: 'idle', hop: Math.floor(t / 1.1) * 1.1 + .3 }); draw3d(A);
+  label('STAUCHEN UND STRECKEN', t, .2);
+};
+SC[1] = t => {
+  lebendig(t, 'innen', { unscharf: 8 });
+  B.coin.rotation.set(Math.PI / 2 - .35, 0, Math.sin(t * 1.6) * .9);
+  B.eu.pose(t, { mood: 'wow', ziel: [0, 1.6, 0] }); draw3d(B);
+  label('ECHTES LICHT', t, 3.2);
+};
+SC[2] = t => {
+  lebendig(t, 'weltall', { unscharf: 6 });
+  C2.pl.rotation.y = t * .5; C2.eu.pose(t, { mood: 'fly', ziel: [0, 1.5, 0] }); draw3d(C2);
+  label('KOPF FOLGT DEM BLICK', t, 6.2, 1380);
+};
+SC[3] = t => {
+  lebendig(t, 'stadt', { unscharf: 8 });
+  D.ring.rotation.set(1.1 + Math.sin(t) * .2, t * .8, 0); D.eu.pose(t, { mood: 'happy' }); draw3d(D);
+  label('LACK UND METALL', t, 9.2);
+};
+SC[4] = t => {
+  lebendig(t, 'himmel', { unscharf: 8 });
+  A.eu.pose(t, { mood: 'happy', ziel: [3, 4, 4] }); draw3d(A);
+  const k = p(t, 12.3, 13.6), n = Math.round(1e6 * eo(k));
+  if (k > 0) text(n.toLocaleString('de-DE'), 540, 330, 150, 'IDB', '#ffd23f', { sc: lerp(.6, 1, spring(p(t, 12.3, 12.9))), stroke: 14, strokeColor: 'rgba(10,6,30,.85)' });
+  label('ZAHLEN MIT SCHWUNG', t, 12.6, 520);
+};
+SC.forEach((f, i) => { SC[i] = t => { if (!A) setup(); f(t); }; });
+function scene(t) { let i = 0; while (i < 4 && t >= CFG.CUTS[i]) i++; SC[i](t); }
+</script>
+</body></html>

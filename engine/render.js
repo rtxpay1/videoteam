@@ -11,6 +11,8 @@ const path = require('path');
   const browser = await chromium.launch({ args: ['--allow-file-access-from-files'] });
   const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DRAFT ? .5 : 1 });
   page.on('pageerror', e => console.error('Seitenfehler:', e.message));
+  // Bildrate für die Bewegungsunschärfe; 3D-Ebene beim echten Rendern in voller Auflösung (schärfere Kanten), beim Probe-Render halb
+  await page.addInitScript(([fps, s]) => { window.FPS = fps; if (window.FX3D_SCALE == null) window.FX3D_SCALE = s; }, [fps, DRAFT ? .5 : +(process.env.SCALE3D || 1)]);
   await page.goto('file://' + path.resolve(scene));
   await page.evaluate(() => window.ready);
   const clip = { x: 0, y: 0, width: W, height: H };
@@ -35,5 +37,9 @@ const path = require('path');
     if (i % 150 === 0) console.log(`Bild ${i}/${n}`);
   }
   ff.stdin.end(); await new Promise(r => ff.on('close', r));
+  const mb = await page.evaluate(() => typeof MB !== 'undefined' ? [MB.on, MB.n] : null);
+  if (mb && mb[1]) console.log(`Bewegungsunschärfe: ${mb[0]} von ${mb[1]} Bildern`);
+  const fehlt = await page.evaluate(() => typeof FEHLT_ANKER !== 'undefined' ? [...FEHLT_ANKER] : []);
+  if (fehlt.length) console.error('Ankerwort nicht gefunden (Element erscheint bei 0 s):', fehlt.join(', '));
   await browser.close();
 })();

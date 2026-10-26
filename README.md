@@ -6,10 +6,13 @@ Video-Produktionsteam „Zum Goldenen Token“: deutsche Erklär-Shorts (9:16, 1
 
 | Ordner / Datei | Inhalt |
 |---|---|
-| `engine/lib.js` | Grundgerüst jeder Szene: Untertitel, Übergänge, RGB-Split, Farbe, Korn, Dauerbewegung |
-| `engine/fx.js` | Effekt-Bibliothek (Morphing, Pixel-Zerfall, Iris, Split-Screen, 3D-Drehung, Strichzeichnung, Warp, Partikel, Diagramme, Parallax …) |
-| `engine/fx3d.js` | 3D-Baukasten im Hausstil „Goldener Token 3D“ (three.js): Low-Poly, Toon-Licht, Kontur; Planet, Mond, Felsen, Kristall, Ring, Papierstapel, Figur und das Maskottchen Eula (`FX3D.eula()`, Posen idle/wave/wow/point/think/happy/fly über `eu.pose(t, { mood })`). Beispiele: `qa/demo3d.html`, `qa/eula.html` |
-| `engine/vendor/` | three.js 0.186.1 (MIT-Lizenz) |
+| `engine/lib.js` | Grundgerüst jeder Szene: Untertitel, Szenen-Übergänge (zoom, wisch, form, schieben, farbe; auf dem Takt), Kino-Farblook, Bewegungsunschärfe, Korn, Dauerbewegung, Federkurven (`spring`, `nach`), Einblenden auf dem Wort (`wort`, `aufWort`) |
+| `engine/fx.js` | Effekt-Bibliothek (Tiefenschärfe `unscharf`, lebendige Hintergründe `lebendig`, Morphing, Pixel-Zerfall, Iris, Split-Screen, 3D-Drehung, Strichzeichnung, Warp, Partikel, Diagramme, Parallax …) |
+| `engine/fx3d.js` | 3D-Baukasten im Hausstil „Goldener Token 3D“ (three.js): Low-Poly, Toon-Licht, Kontur; Lichtstimmungen (`licht`), Glanz-Material (`glanz`), weicher Bodenschatten (`schatten`); Planet, Mond, Felsen, Kristall, Ring, Papierstapel, Figur und das Maskottchen Eula (`FX3D.eula()`, Posen idle/wave/wow/point/think/happy/fly über `eu.pose(t, { mood })`, mit Stauchen/Strecken, Sprung `hop`, Blick `ziel`). Beispiele: `qa/demo3d.html`, `qa/eula.html` |
+| `engine/vendor/` | three.js 0.186.1 (MIT-Lizenz), dazu EXR-Lader und Studiolicht aus den three.js-Beispielen |
+| `engine/assets/hdri/` | Lichtstimmungen von Poly Haven (CC0) für `FX3D.licht()` und Glanz-Material `FX3D.glanz()` |
+| `engine/ankercheck.py` | Prüft vor dem Rendern, ob jedes Ankerwort (ph, wort, aufWort) auch gesprochen wird |
+| `qa/look.html` | Vorschau des Looks: Übergänge, Eula mit Stauchen/Strecken und Blick, Glanz und Licht, Tiefenschärfe |
 | `engine/tts.py` | Hausstimme „Karlsson euphorisch“ (Chatterbox Multilingual, MIT; Vorlage aus dem HUI-Korpus, CC0) |
 | `engine/timing.py` | Sprachspur + Satz-/Teilsatz-Zeiten, prüft die Länge 60–70 s |
 | `engine/sound.py`, `engine/mix.sh` | Musik und Effekte erzeugen, Endmix auf −14 LUFS |

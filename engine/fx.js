@@ -225,9 +225,11 @@ function verdict(t, t0, label, score, o = {}) {
 //   lebendig(t, 'wasser')   Lichtmuster, aufsteigende Blasen, Fischschwärme
 //   lebendig(t, 'innen')    Staub im Licht, Lichtkegel, weiche Lichtpunkte
 //   lebendig(t, 'stadt')    Häuser in 2 Ebenen, blinkende Fenster, fahrende Lichter
-// Optionen: { a: Deckkraft (1), speed: Tempo (1), col: Grundfarbe, kein: true = Himmel/Grund nicht füllen }
+// Optionen: { a: Deckkraft (1), speed: Tempo (1), col: Grundfarbe, kein: true = Himmel/Grund nicht füllen,
+//   unscharf: Pixel (z. B. 6) = Hintergrund mit Tiefenschärfe, damit Eula und die Hauptsache sich abheben }
 const LEB = (() => { const r = rng(77); return Array.from({ length: 140 }, () => ({ x: r(), y: r(), z: .3 + r() * .7, s: r(), p: r() * 6.283 })); })();
 function lebendig(t, art, o = {}) {
+  if (o.unscharf) return unscharf(o.unscharf, () => lebendig(t, art, { ...o, unscharf: 0 }));
   const a = o.a ?? 1, v = (o.speed ?? 1) * t;
   g.save(); g.globalAlpha *= a;
   const wrap = (x, m) => ((x % m) + m) % m;
@@ -295,4 +297,17 @@ function lebendig(t, art, o = {}) {
       g.fillStyle = k % 2 ? 'rgba(255,240,200,.9)' : 'rgba(255,70,70,.9)'; g.fillRect(x, y, 26, 8); }
   }
   g.restore();
+}
+
+// ---------- Tiefenschärfe ----------
+// unscharf(px, () => { ...Hintergrund zeichnen... }): zeichnet den Inhalt weichgezeichnet, wie mit einer Kamera,
+// die auf den Vordergrund scharf stellt. Gerechnet in Viertel-Auflösung (billig). Eula und Hauptsache NIE hier hinein.
+// Beispiel: unscharf(6, () => lebendig(t, 'stadt'));  danach Eula und Vordergrund normal zeichnen.
+const UNS = [0, 1].map(() => Object.assign(document.createElement('canvas'), { width: W / 4, height: H / 4 }));
+function unscharf(px, draw) {
+  const [a, b] = UNS, xa = a.getContext('2d'), xb = b.getContext('2d'), keep = g, m = keep.getTransform();
+  xa.setTransform(1, 0, 0, 1, 0, 0); xa.clearRect(0, 0, a.width, a.height); xa.setTransform(m.a / 4, m.b / 4, m.c / 4, m.d / 4, m.e / 4, m.f / 4);
+  g = xa; draw(); g = keep;
+  xb.setTransform(1, 0, 0, 1, 0, 0); xb.clearRect(0, 0, b.width, b.height); xb.filter = `blur(${px / 4}px)`; xb.drawImage(a, 0, 0); xb.filter = 'none';
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingQuality = 'high'; g.drawImage(b, 0, 0, W, H); g.restore();
 }

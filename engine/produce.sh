@@ -10,6 +10,8 @@ bash engine/check.sh
 python3 engine/timing.py "$d" > /dev/null
 # genaue Wort-Zeiten für die Untertitel (Spracherkennung)
 ./tts-env/bin/python engine/words.py "$d"
+# jedes Ankerwort (ph, wort, aufWort) muss gesprochen werden, sonst käme das Element bei 0 s
+python3 engine/ankercheck.py "$d"
 python3 "$d/sound_gen.py"
 python3 engine/sound.py "$d"
 bash engine/mix.sh "$d"

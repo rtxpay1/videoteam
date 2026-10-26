@@ -7,6 +7,8 @@
 //   <script>window.READY3D = new Promise(r => window.__ready3d = r);</script>
 //   <script type="module" src="../engine/fx3d.js"></script>
 import * as THREE from './vendor/three.module.js';
+import { EXRLoader } from './vendor/jsm/loaders/EXRLoader.js';
+import { RoomEnvironment } from './vendor/jsm/environments/RoomEnvironment.js';
 
 const W = 1080, H = 1920;
 // Die 3D-Ebene wird in geringerer Auflösung gerechnet und hochskaliert (Software-Grafik ist langsam);
@@ -65,6 +67,42 @@ function jitter(geo, amt, seed = 1) {
 }
 const C = c => new THREE.Color(c);
 
+// ---------- Echtes Licht: Lichtstimmungen (HDRI) und Glanz ----------
+// Lichtstimmungen von Poly Haven (CC0, engine/assets/hdri): studio, sunset, night, city, forest, sky, warehouse, dawn.
+// Vorher im <head> anmelden (werden beim Laden vorbereitet):  <script>window.LICHT3D = ['studio'];</script>
+// 'raum' (gleichmäßiges Studiolicht, wird berechnet) geht immer ohne Anmeldung.
+// FX3D.licht(stage, 'sunset', { staerke: 1 }) setzt die Stimmung als Umgebungslicht und Spiegelung und schaltet
+// für diese Bühne Film-Tonwerte ein (ACES: weiche Lichter, satte Schatten). Wirkt vor allem auf glanz()-Material;
+// das Hausstil-Material toon() bleibt flach.
+const pmrem = new THREE.PMREMGenerator(renderer), ENV = {};
+const HDRI = ['studio', 'sunset', 'night', 'city', 'forest', 'sky', 'warehouse', 'dawn'];
+const envLaden = Promise.all((window.LICHT3D || []).filter(n => HDRI.includes(n)).map(async n => {
+  const uri = (await import(`./assets/hdri/${n}.exr.js`)).default, tex = await new EXRLoader().loadAsync(uri);
+  ENV[n] = pmrem.fromEquirectangular(tex).texture; tex.dispose();
+})).catch(e => console.error('Lichtstimmung nicht geladen:', e.message));
+function licht(st, name = 'raum', o = {}) {
+  if (!ENV[name] && name !== 'raum') { console.error(`Lichtstimmung „${name}“ nicht in window.LICHT3D angemeldet, nehme „raum“`); name = 'raum'; }
+  if (!ENV.raum && name === 'raum') ENV.raum = pmrem.fromScene(new RoomEnvironment(), .04).texture;
+  st.scene.environment = ENV[name]; st.scene.environmentIntensity = o.staerke ?? 1; st.kino = true;
+  if (o.hintergrund) st.scene.background = ENV[name];
+  return st;
+}
+// Glänzendes, echt beleuchtetes Material (Münzen, Metall, Lack, nasse Steine). metall 0..1, rau 0..1 (0 = Spiegel), lack 0..1 (Klarlack)
+function glanz(color, o = {}) {
+  return new THREE.MeshPhysicalMaterial({ color, metalness: o.metall ?? 0, roughness: o.rau ?? .3, clearcoat: o.lack ?? .5, clearcoatRoughness: .12, emissive: o.emissive ?? 0x000000, emissiveIntensity: o.ei ?? 0 });
+}
+// Weicher Bodenschatten (statt teurer Schattenberechnung): flacher dunkler Fleck unter einem Objekt. r = Radius, a = Deckkraft
+let SCHATTEN_TEX = null;
+function schatten(r = 1.5, a = .5) {
+  if (!SCHATTEN_TEX) {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(.45, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    SCHATTEN_TEX = new THREE.CanvasTexture(c);
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), new THREE.MeshBasicMaterial({ map: SCHATTEN_TEX, transparent: true, opacity: a, depthWrite: false, color: 0x0a0418 }));
+  m.rotation.x = -Math.PI / 2; m.renderOrder = -1; return m;
+}
+
 // ---------- Fertige Objekte ----------
 // Planet: Meer, Land und Polkappen als Facetten
 function planet(r = 4, o = {}) {
@@ -111,7 +149,10 @@ function figure(color = 0xff5a8a) {
 // Stimmungen: idle (schwebt leicht), wave (winkt), wow (staunt, Flügel hoch), point (zeigt zur Seite, dir: 1 rechts / -1 links),
 // fly (flattert), think (Flügel am Kinn, Blick nach oben), happy (Augen zu Lachbögen), sleepy (müde: Lider halb zu, Kopf nickt weg;
 // mit o.lid = 1 schläft sie ganz). Blinzeln läuft automatisch.
-// Weitere Optionen: look [x, y] (-1..1, Blickrichtung), blink false (aus), k (0..1, Stärke der Pose, für weiche Übergänge).
+// Weitere Optionen: look [x, y] (-1..1, Blickrichtung), blink false (aus), k (0..1, Stärke der Pose, für weiche Übergänge),
+// ziel [x, y, z] (Weltpunkt: Kopf und Augen folgen ihm, z. B. dem Objekt, über das sie gerade spricht),
+// hop t0 (Sprung ab Zeit t0: erst in die Hocke, dann hoch, Landung federt ab), squash false (Stauchen und Strecken aus).
+// Automatisch: Stauchen beim Aufkommen, Strecken bei schneller Bewegung, Federohren und Cappie schwingen nach.
 const clamp01 = x => Math.min(1, Math.max(0, x)), mixv = (a, b, k) => a + (b - a) * k;
 function soft(color, o) { const m = toon(color, o); m.flatShading = false; return m; }
 function eulaFace(o) {
@@ -172,6 +213,11 @@ function eula() {
   // Pose setzen: Flügelwinkel (z) pro Seite, Körperneigung, Hüpfen, Mimik
   grp.pose = (t, o = {}) => {
     const mood = o.mood || 'idle', k = o.k ?? 1, dir = o.dir || 1, U = face.userData;
+    const bounce = mood === 'wow' || mood === 'happy' || o.hop != null;
+    // Höhe über der Grundposition zu einem Zeitpunkt (für Bewegung, Tempo und Stauchen)
+    const hopH = tt => { if (o.hop == null) return 0; const u = (tt - o.hop) / .65; return u > 0 && u < 1 ? 1.5 * Math.sin(Math.PI * u) : 0; };
+    const hb = tt => hopH(tt) + (mood === 'wow' ? Math.abs(Math.sin(tt * 6)) * .35 : mood === 'fly' ? .6 + Math.sin(tt * 4) * .25 : mood === 'think' ? Math.sin(tt * 1.5) * .05
+      : mood === 'sleepy' ? Math.sin(tt * 1.1) * .03 : mood === 'happy' ? Math.abs(Math.sin(tt * 7)) * .22 : Math.sin(tt * 2.2) * .08);
     let wl = -.25, wr = .25, bob = Math.sin(t * 2.2) * .08, tilt = Math.sin(t * 1.3) * .04, turn = 0, lean = 0, wowF = 0, happyF = 0, sleepF = 0, look = o.look || [0, 0], lift = 0;
     if (mood === 'wave') { wr = 2.3 + Math.sin(t * 9) * .45; tilt = -.06; turn = -.25; }
     if (mood === 'wow') { wl = -2.5 + Math.sin(t * 12) * .15; wr = 2.5 - Math.sin(t * 12) * .15; bob = Math.abs(Math.sin(t * 6)) * .35; tilt = Math.sin(t * 9) * .04; wowF = 1; }
@@ -180,10 +226,21 @@ function eula() {
     if (mood === 'think') { wr = 2.05; tilt = .12; look = o.look || [.4, .8]; bob = Math.sin(t * 1.5) * .05; }
     if (mood === 'sleepy') { sleepF = 1; const nod = Math.max(0, Math.sin(t * 1.1)); lean = .22 * nod * nod; wl = -.08; wr = .08; bob = Math.sin(t * 1.1) * .03; tilt = Math.sin(t * .7) * .08; look = o.look || [0, -.5]; }
     if (mood === 'happy') { happyF = 1; bob = Math.abs(Math.sin(t * 7)) * .22; wl = -.6 - Math.abs(Math.sin(t * 7)) * .4; wr = .6 + Math.abs(Math.sin(t * 7)) * .4; }
+    if (o.ziel && mood !== 'point') {   // Kopf und Blick folgen einem Punkt im Raum
+      const P = new THREE.Vector3(); grp.getWorldPosition(P); const zv = Array.isArray(o.ziel) ? new THREE.Vector3(...o.ziel) : o.ziel, d = zv.clone().sub(P), L = d.length() || 1;
+      turn = Math.max(-.6, Math.min(.6, Math.atan2(d.x, Math.max(d.z, .5)) * .6)); look = o.look || [Math.max(-1, Math.min(1, d.x / L * 1.6)), Math.max(-1, Math.min(1, d.y / L * 1.6))];
+    }
+    // Tempo der Auf-und-ab-Bewegung: daraus Strecken, Stauchen und das Nachschwingen von Ohren, Flügeln und Cappie
+    const vel = (hb(t + .02) - hb(t - .02)) / .04, h = hb(t), pre = o.hop != null ? Math.max(0, 1 - Math.abs(t - o.hop + .12) / .12) : 0;
+    const land = o.hop != null ? Math.max(0, 1 - Math.abs(t - o.hop - .7) / .12) : 0, ground = bounce ? Math.max(0, 1 - h / .06) * (o.hop != null && mood !== 'wow' && mood !== 'happy' ? 0 : 1) : 0;
+    const q = Math.max(ground, pre, land), str = Math.min(.14, Math.abs(vel) * .06);
+    const sy = o.squash === false ? 1 : 1 + mixv(0, str * (1 - q) - .17 * q, k), sx = 1 / Math.sqrt(sy);
+    wl += vel * .12; wr -= vel * .12;
     wings[0].rotation.z = mixv(-.25, wl, k); wings[1].rotation.z = mixv(.25, wr, k); wings[1].rotation.y = mood === 'think' ? mixv(0, -1.1, k) : 0;
-    rig.position.y = mixv(0, bob + lift, k); feet.forEach(f => f.rotation.x = mood === 'fly' ? mixv(0, .6, k) : 0);
+    rig.position.y = mixv(0, bob + lift + hopH(t), k) + (sy - 1) * 1.68; rig.scale.set(sx, sy, sx);   // Füße bleiben beim Stauchen am Boden
+    cap.rotation.z = -.1 - vel * .05; cap.rotation.x = -.08 + Math.min(0, vel) * -.04; feet.forEach(f => f.rotation.x = mood === 'fly' ? mixv(0, .6, k) : 0);
     rig.rotation.set(mixv(0, lean, k), mixv(0, turn, k), mixv(0, tilt, k));
-    ears.forEach((e, i) => e.rotation.z = -(i ? 1 : -1) * (.62 + Math.sin(t * 3 + i) * .05 + wowF * .2));
+    ears.forEach((e, i) => e.rotation.z = -(i ? 1 : -1) * (.62 + Math.sin(t * 3 + i) * .05 + wowF * .2 - vel * .1 + q * .15));
     U.smile.visible = wowF * k < .5; U.open.visible = wowF * k >= .5;
     // automatisches Blinzeln (zweimal kurz hintereinander alle paar Sekunden, gleiche Zeiten bei jedem Render)
     const ph = (t + 1.3) % 3.7, bl = o.blink === false ? 0 : clamp01(Math.max(1 - Math.abs(ph - .1) / .1, 0));
@@ -208,6 +265,7 @@ function eula() {
 const gl = renderer.getContext(), PIX = new Uint8Array(RW * RH * 4), out = document.createElement('canvas'); out.width = RW; out.height = RH;
 const octx = out.getContext('2d', { willReadFrequently: true }), IMG = octx.createImageData(RW, RH), ROW = RW * 4;
 function render(st) {
+  renderer.toneMapping = st.kino ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; renderer.toneMappingExposure = st.belichtung ?? 1.05;
   renderer.render(st.scene, st.cam);
   gl.readPixels(0, 0, RW, RH, gl.RGBA, gl.UNSIGNED_BYTE, PIX);
   for (let y = 0; y < RH; y++) IMG.data.set(PIX.subarray((RH - 1 - y) * ROW, (RH - y) * ROW), y * ROW);   // WebGL liefert die Zeilen von unten nach oben
@@ -216,5 +274,5 @@ function render(st) {
   octx.putImageData(IMG, 0, 0); return out;
 }
 
-window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng };
-if (window.__ready3d) window.__ready3d();
+window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng, licht, glanz, schatten };
+envLaden.then(() => { if (window.__ready3d) window.__ready3d(); });

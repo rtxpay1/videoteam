@@ -4,6 +4,8 @@
 #               "events": [ {"t": 0.0, "type": "riser", "gain": .35, "pan": .5, "d": .5}, ... ] }
 # Titelmelodie: {"t": .., "type": "motif", "gain": .25} – zweimal (Start, Eula-Urteil)
 # Erkennungs-Sound: {"t": .., "type": "eula", "gain": .3} – genau zweimal pro Video (erster Eula-Auftritt, Pointe)
+# "wechsel": true – legt an jeden Szenen-Übergang automatisch einen Wisch-Ton, genau auf die Zeit, die lib.js für den
+#   Übergang nimmt (nächster Achtel-Schlag kurz vor dem Schnitt). Dann in sound_gen.py keine eigenen Schnitt-Wischer mehr.
 import json, os, sys, wave
 import numpy as np
 
@@ -109,6 +111,15 @@ def motif():
         s0 = int(at * SR); out[s0:s0 + n] += x[:len(out) - s0] * .32
     return out
 GEN = {'motif': motif, 'eula': eula, 'whoosh': whoosh, 'boom': boom, 'shimmer': shimmer, 'pop': pop, 'riser': riser, 'reverse': reverse, 'swipe': swipe, 'glitch': glitch, 'scratch': scratch, 'tick': tick, 'wind': wind}
+
+# Übergangs-Zeiten wie in lib.js (ueZeit): Achtel-Schlag in [Schnitt - 0,25 s, Schnitt + 0,05 s], sonst Schnitt - 0,1 s
+def ue_zeit(tb):
+    b = 30 / bpm; c = np.floor((tb - .1) / b + .5) * b
+    return float(c) if tb - .25 <= c <= tb + .05 else tb - .1
+if C.get('wechsel'):
+    T = json.load(open(os.path.join(d, 'timing.json')))
+    for i, (a, _) in enumerate(T['sentences'][1:]):
+        C['events'].append(dict([('t', ue_zeit(a)), ('pre', .5)] + list(([('type', 'whoosh'), ('dd', .45), ('f0', 500), ('f1', 5000)], [('type', 'swipe'), ('dd', .3)])[i % 2]) + [('gain', .1), ('pan', .3 + .4 * (i % 2))]))
 
 sfx = np.zeros((2, N))
 for ev in C['events']:
