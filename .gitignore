@@ -42,3 +42,9 @@ hoerproben/
 voices/hausstimme_piep_*.wav
 qa/look/
 p-*/look_*.html
+p-*/redo*/
+p-*/alt/
+p-*/r_*.jpg
+p-*/t_*.jpg
+p-*/scene_test.html
+p-*/*.txt.bak

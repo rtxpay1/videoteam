@@ -1,0 +1,304 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<!-- Eula testet: Die Flugzeugtür im Reiseflug öffnen #1 -->
+<script>
+window.LICHT3D = ['sky', 'studio', 'sunset'];
+window.READY3D = new Promise(r => window.__ready3d = r);
+const TIMING = __TIMING__;
+const S_ = TIMING.sentences, NS = S_.length;
+const at = (i, f) => S_[i][0] + (S_[i][1] - S_[i][0]) * f;
+const END = S_[NS - 1][1] + .2;
+const ph = w => (TIMING.phrases.find(x => x[2].includes(w)) || [Infinity])[0];
+// Eula-Fail (2,6 s, nur im Bild) im Satz, der bei ca. 66 % der Länge läuft
+// hier passend zum Satz „Gegen einen Elefanten … keine Chance“ (Satz 9), ab 60 % der Länge
+const FI = 8, FT = Math.max(S_[FI][0] + .4, TIMING.dur * .6), FD = Math.min(2.6, S_[FI][1] - FT);
+const inFail = t => t >= FT && t < FT + FD;
+window.CFG = {
+  REPL: [['zehn Kilometern', '10 Kilometern'], ['zweitausend Metern', '2.000 Metern'], ['Zweitausenddreiundzwanzig', '2023'], ['zweihundert Metern', '200 Metern'], ['null von zehn Punkten', '0 von 10 Punkten']],
+  LOOP: true, DUR: TIMING.dur, CUTS: S_.slice(1).map(s => s[0]), PHRASES: TIMING.phrases, CAP_END: END,
+  KEY: /^(10|Kilometern|Flugzeugtür|Millimeter|dünn|Minute|Berg|2\.000|Metern|Luft|Quadratmeter|Elefant|Elefanten|Stöpsel|Wanne|innen|Druck|Kraft|Landung|2023|Südkorea|Notausgangstür|200|lebensgefährlich|strafbar|festgenommen|Urteil|0|Tür|Kommentare)/,
+  UEBERGANG: ['zoom', 'wisch', { art: 'form', x: 540, y: 820 }, 'farbe', 'schieben', 'zoom', 'wisch', { art: 'form', x: 540, y: 900 }, 'farbe', 'wisch', 'schieben', 'zoom', 'wisch'],
+  split: t => 10 * (1 - p(t, 0, .6)) + 12 * Math.max(0, 1 - Math.abs(t - FT - 1.1) / .25),
+  shake: t => (t < 2.5 ? 7 * (1 - t / 2.5) : 0) + (inFail(t) && t > FT + 1.0 && t < FT + 1.5 ? 12 * (1 - (t - FT - 1.0) / .5) : 0),
+};
+</script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script>
+const draw3d = st => g.drawImage(FX3D.render(st), 0, 0, W, H);
+const outline = { stroke: 12, strokeColor: 'rgba(10,6,30,.85)' };
+function big(s, y, size, col, k, o = {}) { if (k > 0) text(s, o.x ?? 540, y, size, 'IDB', col, { alpha: clamp(k * 3) * (o.alpha ?? 1), sc: lerp(.45, 1, spring(clamp(k))), ls: o.ls ?? -2, glow: o.glow, blur: 50, ...outline, rot: o.rot }); }
+const kam = (st, t, t0, keys) => FX3D.kamera(st, t - t0, keys);
+let KA, FL, BG, QS, EL, LA, WA;
+const KNAUF = [-.53, 1.5, 2.2];   // Weltposition des Türhebel-Knaufs in der Kabine
+function setup3d() {
+  const F = FX3D, T = F.THREE;
+  // ---------- KA: Kabine mit Tür am Gangende ----------
+  KA = F.licht(F.stage({ fov: 52 }), 'studio', { staerke: .3 }); F.nebel(KA, 0x2a3048, 14, 30);
+  KA.kab = KA.add(F.kabine({ reihen: 9, himmel: 0x8fd0ff }));
+  KA.eu = KA.add(F.eula()); KA.eu.scale.setScalar(.36);
+  KA.sh = KA.add(F.schatten(.6, .45));
+  KA.gurt = KA.add(F.rund(.62, .07, .05, .02, F.glanz(0x9aa2ae, { metall: .7, rau: .3 }))); KA.gurt.visible = false;
+  KA.hebelAus = KA.add(F.rund(.95, .1, .1, .05, F.glanz(0xe8ecf4, { metall: 1, rau: .15 }))); KA.hebelAus.visible = false;
+  // ---------- FL: Flugzeug über dem Wolkenmeer ----------
+  FL = F.licht(F.stage({ fov: 36 }), 'sky', { staerke: .32 }); F.himmel(FL, { sonne: [18, 220], dunst: 3 }); F.nebel(FL, 0xb8d4ee, 60, 260);
+  FL.flz = FL.add(F.flugzeug({ farbe: 0x1e4fb8 }));
+  FL.wolken = new T.Group(); FL.add(FL.wolken); const r = F.rng(12);
+  for (let k = 0; k < 40; k++) { const w = F.wolke({ groesse: 2.5 + r() * 4, seed: k + 3 }); w.position.set(-120 + r() * 240, -9 - r() * 4, -80 + r() * 100); FL.wolken.add(w); }
+  FL.eu = F.eula(); FL.eu.scale.setScalar(.36); FL.add(FL.eu);
+  FL.luft = FL.add(F.blasen(70, [16, 6, 8], 7));
+  // ---------- BG: Berg (2.000 m) unter dem Flugzeug (10 km) ----------
+  BG = F.licht(F.stage({ fov: 38 }), 'sky', { staerke: .32 }); F.himmel(BG, { sonne: [20, 200], dunst: 4 }); F.nebel(BG, 0xb8d4ee, 70, 300);
+  BG.berg = BG.add(F.berg(10, { seed: 5 })); BG.berg.position.set(-1, -22, 0);
+  [[-16, -22, -12, 7], [9, -22, -18, 8], [-26, -22, -26, 6]].forEach(([x, y, z, h], i) => { const b = BG.add(F.berg(h, { seed: 7 + i })); b.position.set(x, y, z); });
+  BG.boden = BG.add(F.boden(160, { farbe: 0x4a7a4a, rand: 0x9ab8d0 })); BG.boden.position.y = -20;
+  BG.flz = BG.add(F.flugzeug()); BG.flz.scale.setScalar(.8); BG.flz.position.set(0, 12, 0);
+  BG.eu = F.eula(); BG.eu.scale.setScalar(.4); BG.add(BG.eu);
+  BG.luft = BG.add(F.blasen(90, [6, 3, 3], 9)); BG.luft.position.set(0, 12, 1);
+  BG.wolken = new T.Group(); BG.add(BG.wolken); { const r2 = F.rng(31); for (let k = 0; k < 16; k++) { const w = F.wolke({ groesse: 2 + r2() * 3, seed: 40 + k }); w.position.set(-50 + r2() * 100, -2 + r2() * 10, -20 - r2() * 30); BG.wolken.add(w); } }
+  // ---------- QS: Querschnitt durch den Rumpf (Druck drinnen, Stöpseltür) ----------
+  QS = F.licht(F.stage({ fov: 36 }), 'studio', { staerke: .45 });
+  const haut = F.glanz(0xe6eaf0, { rau: .35, lack: .6 }), innen = F.glanz(0x7a8aa8, { rau: .6 });
+  QS.ring = QS.add(new T.Mesh(new T.TorusGeometry(4, .35, 24, 96), haut));
+  QS.boden = QS.add(F.rund(7, .25, 3, .1, innen)); QS.boden.position.y = -1.2;
+  QS.drin = QS.add(F.blasen(220, [7, 7, 2], 4)); QS.draussen = QS.add(F.blasen(26, [22, 22, 2], 6));
+  QS.pfeile = new T.Group(); QS.add(QS.pfeile);
+  const rot = F.glanz(0xff3a5a, { rau: .3, lack: 1 });
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2, pf = new T.Group(); const st = F.rund(.16, 1.0, .16, .07, rot); st.position.y = .5; pf.add(st); const sp = new T.Mesh(new T.ConeGeometry(.3, .55, 24), rot); sp.position.y = 1.2; pf.add(sp); pf.position.set(Math.cos(a) * 2.3, Math.sin(a) * 2.3, 0); pf.rotation.z = a - Math.PI / 2; QS.pfeile.add(pf); }
+  QS.eu = QS.add(F.eula()); QS.eu.scale.setScalar(.45); QS.eu.position.set(0, -.15, .5);
+  // Stöpseltür: Wandstück mit Öffnung und keilförmige Tür, größer als die Öffnung
+  QS.wand = new T.Group(); QS.add(QS.wand);
+  [[2.1, 1], [-2.1, 1]].forEach(([y]) => { const w = F.rund(.5, 2.4, 2.2, .1, F.glanz(0x8a96aa, { rau: .5, lack: .3 })); w.position.set(0, y, 0); QS.wand.add(w); });
+  QS.stopsel = F.platte([[-.5, -1.25], [.5, -1.6], [.5, 1.6], [-.5, 1.25]], 2.0, F.glanz(0x5aaaf0, { rau: .3, lack: 1 })); QS.wand.add(QS.stopsel);
+  QS.wpfeile = new T.Group(); QS.wand.add(QS.wpfeile);
+  for (let k = 0; k < 3; k++) { const pf = new T.Group(); const st = F.rund(1.1, .16, .16, .07, rot); pf.add(st); const sp = new T.Mesh(new T.ConeGeometry(.28, .5, 24), rot); sp.rotation.z = -Math.PI / 2; sp.position.x = .75; pf.add(sp); pf.position.set(-1.9, (k - 1) * .9, 0); QS.wpfeile.add(pf); }
+  QS.wand.visible = false;
+  // ---------- WA: Badewanne mit Stöpsel (Tür sitzt wie ein Stöpsel) ----------
+  WA = F.licht(F.stage({ fov: 40 }), 'studio', { staerke: .38 }); F.nebel(WA, 0x1a2440, 16, 40);
+  const fl = F.glanz(0xdfe6ee, { rau: .4, lack: .5 });
+  for (let x = -6; x <= 6; x++) for (let z = -5; z <= 3; z++) { const k = WA.add(F.rund(.96, .1, .96, .04, (x + z) % 2 ? fl : F.glanz(0xb8c4d4, { rau: .4, lack: .5 }))); k.position.set(x, -.05, z); }
+  const wan = F.glanz(0xfafcff, { rau: .2, lack: 1 });
+  WA.wanne = new T.Group(); WA.add(WA.wanne);
+  [[0, .9, -1.55, 6.4, 1.8, .3], [0, .9, 1.55, 6.4, 1.8, .3], [-3.05, .9, 0, .3, 1.8, 3.4], [3.05, .9, 0, .3, 1.8, 3.4], [0, .1, 0, 6.4, .2, 3.4]].forEach(([x, y, z, w, h, d]) => { const m = F.rund(w, h, d, .14, wan); m.position.set(x, y, z); WA.wanne.add(m); });
+  WA.wasser = WA.add(F.wasser(5.8, 2.8, { farbe: 0x1a78c8, tiefe: .55, spiegel: .15 })); WA.wasser.position.y = 1.45;
+  WA.ring = WA.add(new T.Mesh(new T.TorusGeometry(.3, .06, 12, 40), F.glanz(0xe8ecf4, { metall: 1, rau: .15 }))); WA.ring.rotation.x = Math.PI / 2; WA.ring.position.set(1.8, .23, 0);
+  WA.stopsel = WA.add(new T.Mesh(new T.CylinderGeometry(.46, .38, .3, 40), F.glanz(0x2a2e3a, { rau: .6, lack: .2 }))); WA.stopsel.position.set(1.8, .38, 0);
+  WA.kette = WA.add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([new T.Vector3(1.8, .55, 0), new T.Vector3(2.2, 1.2, .2), new T.Vector3(2.7, 1.95, .5)]), 20, .03, 8), F.glanz(0xe8ecf4, { metall: 1, rau: .2 })));
+  WA.pfeile = new T.Group(); WA.add(WA.pfeile); const rotM = F.glanz(0xff3a5a, { rau: .3, lack: 1 });
+  [-1, 0, 1].forEach(k => { const pf = new T.Group(); const st = F.rund(.14, .8, .14, .06, rotM); st.position.y = .45; pf.add(st); const sp = new T.Mesh(new T.ConeGeometry(.24, .4, 24), rotM); sp.rotation.x = Math.PI; pf.add(sp); pf.position.set(1.8 + k * .45, .75, 0); WA.pfeile.add(pf); });
+  WA.eu = WA.add(F.eula()); WA.eu.scale.setScalar(.42); WA.eu.position.set(.65, 1.55, .45); WA.eu.scale.setScalar(.32);
+  // ---------- EL: Tür mit einem Quadratmeter und Elefant ----------
+  EL = F.licht(F.stage({ fov: 40 }), 'studio', { staerke: .45 }); F.nebel(EL, 0x1a1430, 24, 60);
+  EL.boden = EL.add(new T.Mesh(new T.CircleGeometry(40, 64), F.glanz(0x1a1230, { rau: .35, lack: .8 }))); EL.boden.rotation.x = -Math.PI / 2;
+  EL.tuer = EL.add(F.tuerInnen()); EL.tuer.scale.setScalar(1.5); EL.tuer.position.set(-3.2, 0, -1.5); EL.tuer.rotation.y = .35;
+  EL.qm = EL.add(F.rund(2.2, .12, 2.2, .05, new T.MeshStandardMaterial({ color: 0xffd23f, emissive: 0xffb000, emissiveIntensity: .5 }))); EL.qm.position.set(1.4, .06, 0);
+  EL.ele = EL.add(F.elefant()); EL.ele.scale.setScalar(.8); EL.ele.position.set(1.4, .12, 0);
+  EL.herde = []; for (let k = 0; k < 5; k++) { const e = EL.add(F.elefant({ farbe: [0x9aa0b4, 0x8a90a8, 0xa8aec0][k % 3] })); e.scale.setScalar(.7); e.position.set(-6 + k * 3, 0, -6 - (k % 2) * 2.5); e.visible = false; EL.herde.push(e); }
+  EL.eu = EL.add(F.eula()); EL.eu.scale.setScalar(.5); EL.eu.position.set(-.2, .85, 2); EL.sh = EL.add(F.schatten(.8, .5)); EL.sh.position.set(-.2, .01, 2);
+  // ---------- LA: Landeanflug über Landebahn ----------
+  LA = F.licht(F.stage({ fov: 38 }), 'sunset', { staerke: .38 }); F.himmel(LA, { sonne: [8, 250], dunst: 6 }); F.nebel(LA, 0xd8b4a0, 50, 240);
+  LA.boden = LA.add(F.boden(260, { farbe: 0x5a7a4a, rand: 0xd8b4a0 })); LA.boden.position.y = -.05;
+  LA.bahn = LA.add(F.rund(8, .1, 220, .05, F.glanz(0x2a2c32, { rau: .7 })));
+  for (let k = 0; k < 22; k++) { const m = LA.add(F.rund(.4, .04, 4, .02, F.glanz(0xf2f2e8, { rau: .5 }))); m.position.set(0, .07, 100 - k * 10); }
+  for (let k = 0; k < 30; k++) { const l = LA.add(F.rund(.3, .2, .3, .1, new T.MeshStandardMaterial({ color: 0xffe0a0, emissive: 0xffc060, emissiveIntensity: 1.6 }))); l.position.set((k % 2 ? 1 : -1) * 4.6, .1, 100 - Math.floor(k / 2) * 14); }
+  LA.flz = LA.add(F.flugzeug({ farbe: 0x2a6a4a })); LA.flz.rotation.y = Math.PI / 2;
+  LA.hinten = new T.Group(); LA.flz.add(LA.hinten); LA.hinten.position.set(-.6, .05, 1.1);   // Notausgang hinter dem Flügel
+  LA.loch = F.rund(.5, .9, .1, .1, F.glanz(0x101820, { rau: .9 })); LA.hinten.add(LA.loch);
+  LA.klappe = F.rund(.5, .9, .08, .1, F.glanz(0xf4f6fa, { rau: .3, lack: 1 })); LA.klappe.position.set(.0, 0, .3); LA.hinten.add(LA.klappe);
+  LA.wind = LA.add(F.blasen(60, [3, 2, 6], 11));
+}
+// ---------- Hintergrund und Bühnen ----------
+const himmelBG = () => bg([[0, '#3a7ad8'], [.6, '#9ad0ff'], [1, '#e8f4ff']]);
+const studioBG = () => { bg([[0, '#2a1a4a'], [1, '#0a0614']]); };
+function kabine(t, o = {}) {
+  bg([[0, '#1a2038'], [1, '#0a0c18']]);
+  const k = KA.kab, hb = k.tuer.hebel; hb.rotation.z = o.hebel ?? Math.sin(t * 7) * .03;
+  KA.eu.visible = o.eula !== false; KA.gurt.visible = !!o.gurt; KA.hebelAus.visible = false; KA.sh.visible = !o.haengt;
+  if (o.haengt) {   // Eula hängt am Knauf, Flügel oben, Füße baumeln
+    KA.eu.position.set(KNAUF[0] + .05, KNAUF[1] - .38 + Math.sin(t * 3) * .03, KNAUF[2] - .2); KA.eu.rotation.set(0, Math.PI + .25, Math.sin(t * 2.6) * (t < 6 ? .28 : .12));
+    KA.eu.pose(t, { mood: 'wow', ...o.pose });
+  } else if (o.sitzt) { KA.eu.position.set(.85, .95, -.55); KA.eu.rotation.set(0, 0, 0); KA.gurt.position.set(.85, .8, -.28); KA.gurt.rotation.set(0, 0, 0); KA.eu.pose(t, o.pose || { mood: 'idle' }); }
+  else { const pos = o.pos || [.25, .62, 1.2]; KA.eu.position.set(...pos); KA.eu.rotation.set(0, Math.PI + (o.dreh ?? 0), o.rz ?? 0); KA.sh.position.set(pos[0], .02, pos[2]); KA.eu.pose(t, o.pose || { mood: 'idle' }); }
+  kam(KA, t, o.t0 ?? 0, o.cam || [{ t: 0, pos: [0, 1.65, -2.6], ziel: [0, 1.4, 2.4], fov: 52 }, { t: 5, pos: [.3, 1.55, -1.4], ziel: [-.1, 1.35, 2.4], fov: 46 }]);
+  draw3d(KA);
+}
+function fluegt(t, o = {}) {
+  himmelBG();
+  FL.wolken.children.forEach((w, i) => { w.position.x = ((w.userData.x0 ??= w.position.x) + t * 9 + 360) % 240 - 120; });
+  FL.flz.fans.forEach(f => f.rotation.x = t * 40); FL.flz.position.y = Math.sin(t * .9) * .2; FL.flz.rotation.x = Math.sin(t * .7) * .03;
+  FL.eu.visible = !!o.eula; if (o.eula) { FL.eu.position.set(1.5, -.35, 4.2 + Math.sin(t * 2) * .1); FL.eu.rotation.set(0, .5, Math.sin(t * 1.4) * .25); FL.eu.pose(t, o.eula); }
+  FL.luft.visible = !!o.luft; if (o.luft) { FL.luft.position.set(0, 0, 0); FL.luft.steigen(t); }
+  kam(FL, t, o.t0 ?? 0, o.cam || [{ t: 0, pos: [10, 3, 18], ziel: [0, 0, 0], fov: 38 }, { t: 5, pos: [3, 1.6, 12], ziel: [0, 0, 1], fov: 34 }]);
+  draw3d(FL);
+}
+// ---------- Szenen (eine pro Satz) ----------
+const SC = [];
+// 0 Hook: Eula hängt am Türhebel, die Tür bewegt sich nicht
+SC[0] = t => {
+  kabine(t, { haengt: true, hebel: Math.sin(t * 9) * .03, cam: [{ t: 0, pos: [0, 2.6, -8.5], ziel: [-.3, 1.2, 2.3], fov: 64 }, { t: 1.6, pos: [.9, 2.1, -4.2], ziel: [-.3, 1.2, 2.3], fov: 54 }, { t: 3.0, pos: [-.5, 1.8, -2.8], ziel: [-.4, 1.15, 2.2], fov: 48 }, { t: 4.4, pos: [.6, 1.55, -2.2], ziel: [-.3, 1.15, 2.2], fov: 44 }, { t: S_[0][1], pos: [.1, 1.6, -1.8], ziel: [-.4, 1.15, 2.2], fov: 44 }] });
+  if (t < 3.5) { KA.cam.rotateZ(Math.sin(t * 2.4) * .05 * (1 - t / 3.5)); }
+  lebendig(t, 'innen', { kein: true, a: .8, speed: 2.2 });
+  big('10 KM', 330, 200, '#ffd23f', aufWort(t, 'zehn', .5), { glow: 'rgba(255,210,63,.6)' });
+  big('0 MM', 520, 120, '#ffffff', aufWort(t, 'Millimeter', .45));
+};
+// 1 Draußen dünne Luft: Eula auf dem Flügel wird schläfrig, Uhr läuft
+SC[1] = t => {
+  const t0 = S_[1][0], k = p(t, wort('Minute'), wort('Minute') + 1.5);
+  fluegt(t, { t0, eula: { mood: t > wort('denken') - .3 ? 'sleepy' : 'wow' }, cam: [{ t: 0, pos: [6, 2.2, 13], ziel: [1, -.2, 3], fov: 36 }, { t: 5, pos: [3.4, .8, 9], ziel: [1.4, -.3, 4], fov: 30 }] });
+  big('LUFT: ZU DÜNN', 330, 96, '#ffffff', aufWort(t, 'dünn', .5), { ls: 0 });
+  if (k > 0) { g.save(); g.translate(860, 500); g.lineWidth = 18; g.strokeStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.arc(0, 0, 90, 0, 7); g.stroke();
+    g.strokeStyle = '#ff4f7a'; g.lineCap = 'round'; g.beginPath(); g.arc(0, 0, 90, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); g.stroke(); g.restore();
+    text('1 MIN', 860, 502, 52, 'IDB', '#ffffff', { ...outline }); }
+};
+// 2 Flugzeug pumpt Luft hinein: wie auf einem Berg mit 2.000 m
+SC[2] = t => {
+  himmelBG(); const t0 = S_[2][0];
+  BG.flz.fans.forEach(f => f.rotation.x = t * 40); const ub = clamp((t - t0) / (S_[2][1] - t0)); BG.flz.position.set(lerp(-9, 7, ub), 12 + Math.sin(t) * .3, 0); BG.luft.position.set(BG.flz.position.x, 12, 1); BG.luft.steigen(t * 2);
+  BG.wolken.children.forEach((w, i) => { w.position.x = ((w.userData.x0 ??= w.position.x) + t * 6 + 150) % 100 - 50; });
+  BG.eu.position.set(-1, -11.4, 1.2); BG.eu.pose(t, { mood: 'happy', ziel: [0, 12, 0] });
+  kam(BG, t, t0, [{ t: 0, pos: [4, -6, 56], ziel: [0, -3, 0], fov: 44 }, { t: 5, pos: [-4, 3, 46], ziel: [0, 0, 0], fov: 42 }]);
+  draw3d(BG);
+  big('10.000 m', 560, 92, '#ffffff', aufWort(t, 'Flugzeug', .5));
+  big('GEFÜHLT: 2.000 m', 1000, 84, '#ffd23f', aufWort(t, 'zweitausend', .5), { glow: 'rgba(255,210,63,.5)', ls: 0 });
+};
+// 3 Drinnen viel mehr Luft als draußen: Querschnitt mit Luftteilchen, Pfeile nach außen
+SC[3] = t => {
+  studioBG(); const t0 = S_[3][0], k = aufWort(t, 'drückt', .8);
+  QS.ring.visible = true; QS.boden.visible = true; QS.drin.visible = QS.draussen.visible = true; QS.pfeile.visible = true; QS.wand.visible = false; QS.eu.visible = true;
+  QS.drin.steigen(t * .5); QS.draussen.steigen(t * .3);
+  QS.pfeile.children.forEach((pf, i) => { const a = i / 12 * Math.PI * 2, d = 2.3 + spring(k) * .9 + Math.sin(t * 6 + i) * .08; pf.position.set(Math.cos(a) * d, Math.sin(a) * d, 0); pf.scale.setScalar(clamp(k * 2)); });
+  QS.eu.pose(t, { mood: 'wow', look: [Math.sin(t * 2), .3] });
+  kam(QS, t, t0, [{ t: 0, pos: [0, 0, 16], ziel: [0, 0, 0], fov: 40 }, { t: 4, pos: [2, 1, 13.5], ziel: [0, .2, 0], fov: 38 }]);
+  draw3d(QS);
+  big('DRINNEN', 300, 92, '#ffd23f', aufWort(t, 'Drinnen', .5), { ls: 0 }); big('VIEL MEHR LUFT', 400, 72, '#ffffff', aufWort(t, 'mehr', .5), { ls: 0 });
+};
+// 4 Ein Quadratmeter Tür = ein Elefant
+SC[4] = t => {
+  studioBG(); const t0 = S_[4][0], k = aufWort(t, 'Elefant', .6);
+  EL.qm.visible = true; EL.qm.material.emissiveIntensity = .3 + aufWort(t, 'Quadratmeter', .4) * .6 + Math.sin(t * 6) * .1;
+  EL.ele.visible = true; EL.ele.position.y = .12 + (1 - spring(k)) * 6; EL.ele.ruessel.rotation.x = Math.sin(t * 2) * .15;
+  EL.herde.forEach(e => e.visible = false); EL.tuer.visible = true;
+  EL.eu.pose(t, { mood: k > .5 ? 'wow' : 'think', ziel: [1.4, 2, 0], hop: wort('Elefant') + .25 });
+  kam(EL, t, t0, [{ t: 0, pos: [-.5, 4, 13], ziel: [.6, 1.4, 0], fov: 42 }, { t: 4.5, pos: [2.5, 3, 11.5], ziel: [.8, 1.6, 0], fov: 40 }]);
+  draw3d(EL);
+  big('1 m² TÜR', 300, 110, '#ffd23f', aufWort(t, 'Quadratmeter', .5), { ls: 0, glow: 'rgba(255,210,63,.5)' });
+  big('= 1 ELEFANT', 430, 100, '#ffffff', k, { ls: 0 });
+  big('ca. 5,5 Tonnen', 1360, 56, '#ffd23f', p(t, wort('wiegt'), wort('wiegt') + .4), { ls: 0 });
+};
+// 5 Stöpseltür: größer als der Rahmen, sitzt wie ein Stöpsel in der Wanne
+SC[5] = t => {
+  bg([[0, '#1a2440'], [1, '#0a0e1c']]); const t0 = S_[5][0], k = aufWort(t, 'Stöpsel', .6), gr = aufWort(t, 'größer', .5);
+  WA.wasser.welle(t, .25); WA.pfeile.children.forEach((pf, i) => { pf.position.y = .75 + Math.sin(t * 6 + i) * .06; pf.scale.setScalar(clamp(k * 2)); });
+  WA.stopsel.scale.set(1 + gr * .12 * Math.sin(t * 8) * (1 - k), 1, 1 + gr * .12 * Math.sin(t * 8) * (1 - k));
+  WA.eu.pose(t, { mood: k > .3 ? 'wow' : 'point', dir: 1, ziel: [1.8, .3, 0] }); WA.eu.position.y = 1.5 + Math.sin(t * 2.2) * .05;
+  kam(WA, t, t0, [{ t: 0, pos: [.4, 9.5, 5.5], ziel: [1.25, .5, .3], fov: 46 }, { t: 5, pos: [1.2, 7.8, 4.4], ziel: [1.3, .5, .3], fov: 44 }]);
+  draw3d(WA);
+  big('GRÖSSER ALS DER RAHMEN', 300, 70, '#ffffff', gr, { ls: 0 });
+  big('WIE EIN STÖPSEL', 420, 104, '#ffd23f', k, { glow: 'rgba(255,210,63,.5)', ls: 0 });
+};
+SC.old5 = t => {
+  studioBG(); const t0 = S_[5][0], k = aufWort(t, 'Stöpsel', .6);
+  QS.ring.visible = QS.boden.visible = QS.drin.visible = QS.draussen.visible = QS.pfeile.visible = QS.eu.visible = false; QS.wand.visible = true;
+  QS.wand.rotation.y = -.5 + Math.sin(t * .6) * .15; QS.stopsel.position.x = .1 + Math.sin(t * 5) * .02;
+  QS.wpfeile.children.forEach((pf, i) => { pf.position.x = -2.2 + Math.sin(t * 5 + i) * .12; pf.scale.setScalar(clamp(aufWort(t, 'Tür', .4, 2) * 2)); });
+  kam(QS, t, t0, [{ t: 0, pos: [5, 2.5, 12], ziel: [0, 0, 0], fov: 40 }, { t: 4.5, pos: [7, 1.5, 10], ziel: [0, 0, 0], fov: 38 }]);
+  big('INNEN', 1180, 60, '#ffffff', 1, { x: 260, ls: 0 }); big('AUSSEN', 1180, 60, '#7ac0ff', 1, { x: 820, ls: 0 });
+  draw3d(QS);
+  big('GRÖSSER ALS DER RAHMEN', 320, 70, '#ffffff', aufWort(t, 'größer', .5), { ls: 0 });
+  big('STÖPSEL', 1300, 130, '#ffd23f', k, { glow: 'rgba(255,210,63,.5)' });
+  big('DRUCK →', 1080, 70, '#ff4f7a', aufWort(t, 'Tür', .4, 2), { x: 300, ls: 0 });
+};
+// 6 Nur nach innen, gegen den Druck: Eula zieht, Druckpfeile drücken zurück
+SC[6] = t => {
+  const t0 = S_[6][0], k = aufWort(t, 'innen', .5), zug = Math.sin(t * 8) * .05 + k * .08;
+  kabine(t, { pos: [-.15, .62, 1.6], dreh: -.4, pose: { mood: 'point', dir: -1 }, hebel: -zug, t0, cam: [{ t: 0, pos: [.25, 1.6, -2.2], ziel: [-.25, 1.1, 2.2], fov: 48 }, { t: 4, pos: [.1, 1.45, -1.3], ziel: [-.25, 1.05, 2.2], fov: 44 }] });
+  big('← NUR NACH INNEN', 330, 82, '#ffffff', k, { ls: 0 });
+  big('DRUCK', 470, 120, '#ff4f7a', aufWort(t, 'Druck', .4), { glow: 'rgba(255,79,122,.5)' });
+};
+// 7 Abo-Aufruf: Eula zieht mit aller Kraft
+SC[7] = t => {
+  const t0 = S_[7][0], k = aufWort(t, 'Kraft', .4);
+  kabine(t, { haengt: true, pose: { hop: wort('ziehe') }, hebel: Math.sin(t * 14) * .04 * k, t0, cam: [{ t: 0, pos: [.3, 1.55, -2.8], ziel: [-.4, 1.25, 2.2], fov: 46 }, { t: 4, pos: [.15, 1.45, -2.0], ziel: [-.4, 1.2, 2.2], fov: 44 }] });
+  subscribeCTA(t, ph('Abonnier'), 540, 360);
+  big('MIT ALLER KRAFT', 1320, 78, '#ffd23f', k, { ls: 0 });
+};
+// 8 Gegen mehrere Elefanten hat eine Eule keine Chance (darin der Eula-Fail)
+SC[8] = t => {
+  studioBG(); const t0 = S_[8][0];
+  EL.qm.visible = false; EL.ele.visible = false; EL.tuer.visible = true;
+  EL.herde.forEach((e, i) => { e.visible = true; const k = nach(t, t0 + .1, i, .12, .5); e.position.y = (1 - spring(k)) * 6; e.ruessel.rotation.x = Math.sin(t * 2 + i) * .2; });
+  EL.eu.pose(t, { mood: 'think', ziel: [0, 2, -6] });
+  kam(EL, t, t0, [{ t: 0, pos: [0, 5, 16], ziel: [0, 1.6, -4], fov: 44 }, { t: 4, pos: [1.5, 4, 13], ziel: [0, 1.6, -4], fov: 42 }]);
+  draw3d(EL);
+  big('KEINE CHANCE', 330, 104, '#ff4f7a', aufWort(t, 'Chance', .5), { glow: 'rgba(255,79,122,.5)' });
+};
+// 9 Kurz vor der Landung wird der Unterschied klein
+SC[9] = t => {
+  bg([[0, '#3a2a6a'], [.6, '#e89a70'], [1, '#ffd8a8']]); const t0 = S_[9][0], u = clamp((t - t0) / (S_[9][1] - t0));
+  LA.flz.position.set(0, lerp(14, 6, eo(u)), lerp(70, 40, u)); LA.flz.rotation.z = .06; LA.flz.fans.forEach(f => f.rotation.x = t * 40);
+  LA.klappe.position.z = .0; LA.klappe.rotation.y = 0; LA.wind.visible = false;
+  { const P = LA.flz.position; LA.cam.position.set(P.x + 16 - u * 3, P.y + 2 - u, P.z + 12); LA.cam.lookAt(P.x, P.y - 1.2, P.z - 1); LA.cam.fov = 38; LA.cam.updateProjectionMatrix(); }
+  draw3d(LA);
+  // Druckanzeige: Unterschied schrumpft
+  const d = lerp(1, .1, eo(p(t, wort('Unterschied'), wort('Unterschied') + 1.6)));
+  g.save(); g.translate(540, 520); g.fillStyle = 'rgba(10,6,30,.6)'; g.beginPath(); g.roundRect(-260, -60, 520, 120, 30); g.fill();
+  g.fillStyle = '#ff4f7a'; g.beginPath(); g.roundRect(-230, -26, 460 * d, 52, 20); g.fill(); g.restore();
+  text('DRUCKUNTERSCHIED', 540, 420, 52, 'IDB', '#ffffff', { ...outline, ls: 0 });
+  big('KLEIN', 680, 120, '#7dff6a', aufWort(t, 'klein', .5), { glow: 'rgba(125,255,106,.5)' });
+};
+// 10 2023 in Südkorea: Notausgang in 200 m Höhe geöffnet
+SC[10] = t => {
+  bg([[0, '#3a2a6a'], [.6, '#e89a70'], [1, '#ffd8a8']]); const t0 = S_[10][0], u = clamp((t - t0) / (S_[10][1] - t0)), auf = aufWort(t, 'Notausgangstür', .6);
+  LA.flz.position.set(0, lerp(4, 2.6, u), lerp(30, 10, u)); LA.flz.rotation.z = .04; LA.flz.fans.forEach(f => f.rotation.x = t * 40);
+  LA.klappe.position.z = .3 * auf; LA.klappe.rotation.y = -1.2 * auf; LA.wind.visible = auf > .2; LA.wind.position.set(LA.flz.position.x + 1.6, LA.flz.position.y, LA.flz.position.z - .6); LA.wind.steigen(t * 4);
+  { const P = LA.flz.position; LA.cam.position.set(P.x + 11, P.y + .8, P.z + 6 - u * 2); LA.cam.lookAt(P.x + 1, P.y - .4, P.z + .5); LA.cam.fov = 40; LA.cam.updateProjectionMatrix(); }
+  draw3d(LA);
+  big('2023 · SÜDKOREA', 320, 80, '#ffffff', aufWort(t, 'Zweitausenddreiundzwanzig', .5), { ls: 0 });
+  const hm = aufWort(t, 'zweihundert', .6);
+  if (hm > 0) { g.save(); g.strokeStyle = 'rgba(255,210,63,.9)'; g.lineWidth = 8; g.setLineDash([24, 16]); g.beginPath(); g.moveTo(330, 1360); g.lineTo(330, lerp(1360, 900, eo(hm))); g.stroke(); g.restore(); }
+  big('200 m', 470, 150, '#ffd23f', aufWort(t, 'zweihundert', .5), { glow: 'rgba(255,210,63,.5)' });
+};
+// 11 Lebensgefährlich und strafbar: Eula angeschnallt, Anschnallzeichen leuchtet
+SC[11] = t => {
+  const t0 = S_[11][0];
+  kabine(t, { sitzt: true, gurt: true, pose: { mood: 'think', look: [0, .4] }, t0, cam: [{ t: 0, pos: [-.4, 2.0, 2.8], ziel: [.8, 1.95, -.55], fov: 56 }, { t: 4, pos: [-.2, 1.85, 2.4], ziel: [.85, 1.9, -.55], fov: 52 }] });
+  const k = aufWort(t, 'strafbar', .3);
+  if (k > 0) { g.save(); g.translate(540, 410); g.rotate(-.12); g.scale(lerp(2.2, 1, eo(k)), lerp(2.2, 1, eo(k))); g.globalAlpha = clamp(k * 3);
+    g.strokeStyle = '#ff2a4a'; g.lineWidth = 12; g.beginPath(); g.roundRect(-300, -80, 600, 160, 18); g.stroke(); g.font = '120px IDB'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#ff2a4a'; g.fillText('STRAFBAR', 0, 6); g.restore(); }
+  big('LEBENSGEFÄHRLICH', 240, 84, '#ffffff', aufWort(t, 'lebensgefährlich', .4), { ls: 0 });
+  big('FESTGENOMMEN', 570, 70, '#ffd23f', aufWort(t, 'festgenommen', .4), { ls: 0 });
+};
+// 12 Urteil
+SC[12] = t => {
+  const t0 = S_[12][0];
+  kabine(t, { pos: [.35, .62, 1.5], dreh: .3, pose: { mood: 'happy' }, t0, cam: [{ t: 0, pos: [.3, 1.8, -3.0], ziel: [0, 1.2, 2.2], fov: 50 }, { t: 4, pos: [.2, 1.6, -2.2], ziel: [0, 1.15, 2.2], fov: 46 }] });
+  verdict(t, ph('Urteil'), 'Machbarkeit', 0, { y: 500 });
+};
+// 13 Kommentar-Aufruf, am Ende wieder das Anfangsbild (Loop)
+SC[13] = t => {
+  const e = END - 1.0;
+  if (t < e) kabine(t, { pos: [.3, .62, 1.3], dreh: 0, pose: { mood: 'wave', look: [0, 0] }, t0: S_[13][0], cam: [{ t: 0, pos: [.2, 1.55, -2.4], ziel: [.2, 1.1, 2.2], fov: 46 }, { t: 3, pos: [.3, 1.5, -1.8], ziel: [.2, 1.1, 2.2], fov: 44 }] });
+  else kabine(t, { haengt: true, cam: [{ t: 0, pos: [1.4, 2.4, -5.5], ziel: [-.3, 1.2, 2.4], fov: 58 }, { t: 1, pos: [1.4, 2.4, -5.5], ziel: [-.3, 1.2, 2.4], fov: 58 }] });   // wie Bild 0
+  commentCTA(t, ph('Schreib'), 540, 420);
+};
+// Eula-Fail: Hebel bricht ab, Eula kugelt rückwärts durch den Gang
+function failScene(t) {
+  const u = t - FT;
+  if (u < 1.0) { kabine(t, { haengt: true, pose: { mood: 'wow' }, hebel: Math.sin(u * 30) * .06, cam: [{ t: 0, pos: [0, 1.6, -1.9], ziel: [-.4, 1.15, 2.2], fov: 44 }, { t: 1, pos: [0, 1.55, -1.6], ziel: [-.4, 1.15, 2.2], fov: 42 }], t0: FT }); big('HNNNGH…', 360, 110, '#ffd23f', p(u, .1, .4), { rot: -.08 }); return; }
+  const k = p(u, 1.0, 2.2), z = lerp(1.9, -2.6, eo(k)), hop = Math.abs(Math.sin(k * Math.PI * 3)) * .5 * (1 - k);
+  kabine(t, { pos: [.05, .62 + hop, z], rz: -k * Math.PI * 4, pose: { mood: k < 1 ? 'wow' : 'happy' }, hebel: 0, cam: [{ t: 0, pos: [0, 1.8, -7.0], ziel: [0, .8, 0], fov: 50 }, { t: 1.6, pos: [0, 1.6, -7.4], ziel: [0, .7, -2.0], fov: 50 }], t0: FT + 1.0 });
+  if (u > 2.0) big('KNACKS!', 360, 140, '#ffd23f', p(u, 2.0, 2.3), { rot: .1, glow: 'rgba(255,210,63,.6)' });
+}
+SC.forEach((f, i) => { SC[i] = t => { if (!KA) setup3d(); if (inFail(t) && i === FI) failScene(t); else f(t); }; });
+function scene(t) { let i = 0; while (i < NS - 1 && t >= CFG.CUTS[i]) i++; SC[i](t); }
+</script>
+</body></html>

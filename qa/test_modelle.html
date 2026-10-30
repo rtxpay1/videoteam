@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html, body { margin: 0; background: #000; } canvas { display: block; }</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<!-- Modellprüfung: 0–2 s Flugzeug, 2–4 s Kabine, 4–6 s Elefant, 6–8 s Wolken und Berg -->
+<script>window.LICHT3D = ['sky', 'studio']; window.READY3D = new Promise(r => window.__ready3d = r);
+window.CFG = { DUR: 8, CUTS: [], PHRASES: [[7.9, 8, ' ']], CAP_END: 0, KEY: /^$/, UEBERGANG: false };</script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+let A, B, C, D; const d3 = st => g.drawImage(FX3D.render(st), 0, 0, W, H);
+function setup() { const F = FX3D;
+  A = F.licht(F.stage({ fov: 34 }), 'sky', { staerke: .5 }); A.f = A.add(F.flugzeug());
+  B = F.licht(F.stage({ fov: 60 }), 'studio', { staerke: .4 }); B.k = B.add(F.kabine());
+  C = F.licht(F.stage({ fov: 34 }), 'studio', { staerke: .45 }); C.e = C.add(F.elefant()); C.eu = C.add(F.eula()); C.eu.scale.setScalar(.6); C.eu.position.set(2.6, 1, 1);
+  D = F.licht(F.stage({ fov: 40 }), 'sky', { staerke: .5 }); D.b = D.add(F.berg(8)); D.w = D.add(F.wolke({ groesse: 3, seed: 3 })); D.w.position.set(4, 9, -4);
+}
+function scene(t) { if (!A) setup(); bg([[0, '#4a90d8'], [1, '#bfe0ff']]);
+  if (t < 2) { A.f.rotation.y = t * .6 + .6; A.cam.position.set(0, 4, 26); A.cam.lookAt(0, 0, 0); d3(A); }
+  else if (t < 4) { B.cam.position.set(0, 1.9, -9); B.cam.lookAt(0, 1.5, 2.5); d3(B); }
+  else if (t < 6) { C.e.rotation.y = (t - 4) * .5 - .4; C.cam.position.set(0, 3, 13); C.cam.lookAt(0, 2, 0); d3(C); }
+  else { D.cam.position.set(0, 6, 24); D.cam.lookAt(0, 5, 0); d3(D); } }
+</script></body></html>

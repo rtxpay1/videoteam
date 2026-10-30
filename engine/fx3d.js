@@ -86,6 +86,8 @@ function licht(st, name = 'raum', o = {}) {
   if (!ENV[name] && name !== 'raum') { console.error(`Lichtstimmung „${name}“ nicht in window.LICHT3D angemeldet, nehme „raum“`); name = 'raum'; }
   if (!ENV.raum && name === 'raum') ENV.raum = pmrem.fromScene(new RoomEnvironment(), .04).texture;
   st.scene.environment = ENV[name]; st.scene.environmentIntensity = o.staerke ?? 1; st.kino = true;
+  // die Hausstil-Lampen der Bühne (für Toon-Material gedacht) dämpfen, sonst wirkt echtes Material überbelichtet
+  if (!st.gedaempft) { st.scene.traverse(l => { if (l.isLight) l.intensity *= o.lampen ?? .3; }); st.gedaempft = true; }
   if (o.hintergrund) st.scene.background = ENV[name];
   return st;
 }
@@ -369,6 +371,131 @@ function boden(r = 60, o = {}) {
   return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9 }));
 }
 
+// ---------- Flugzeug, Kabine, Elefant, Wolken, Berg (Hochwertig-Baukasten) ----------
+// Extrudierte Fläche aus Punkten [[x, y], ...] mit runden Kanten (Flügel, Leitwerk)
+function platte(pts, dicke, mat) {
+  const sh = new THREE.Shape(); pts.forEach(([x, y], i) => i ? sh.lineTo(x, y) : sh.moveTo(x, y)); sh.closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: dicke, bevelEnabled: true, bevelThickness: dicke * .4, bevelSize: dicke * .4, bevelSegments: 3, curveSegments: 8 });
+  geo.translate(0, 0, -dicke / 2); return new THREE.Mesh(geo, mat);
+}
+// Passagierjet (ca. 15 lang, Nase zeigt nach +x). o.farbe (Lackstreifen), o.logo (Farbe des Logos am Leitwerk).
+// Teile: flz.tuer (vordere linke Tür auf der +z-Seite, Gruppe), flz.fenster (Fensterreihen), flz.fans (Triebwerksfächer, drehen um x).
+function flugzeug(o = {}) {
+  const g = new THREE.Group(), weiss = glanz(0xf4f6fa, { rau: .25, lack: 1 }), streifen = glanz(o.farbe ?? 0x1e4fb8, { rau: .3, lack: 1 });
+  const grau = glanz(0xb8c0cc, { metall: .6, rau: .3 }), dunkel = glanz(0x16202e, { rau: .1, lack: 1 }), chrom = glanz(0xe8ecf4, { metall: 1, rau: .15 });
+  const R = 1.1, L = 10;
+  const rumpf = new THREE.Mesh(new THREE.CylinderGeometry(R, R, L, 48, 1), weiss); rumpf.rotation.z = Math.PI / 2; g.add(rumpf);
+  const nase = new THREE.Mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), weiss); nase.rotation.z = -Math.PI / 2; nase.scale.set(1, 1.7, 1); nase.position.x = L / 2; g.add(nase);
+  const heck = new THREE.Mesh(new THREE.CylinderGeometry(R, .28, 4, 48, 1), weiss); heck.rotation.z = Math.PI / 2; heck.position.set(-L / 2 - 2, .45, 0); heck.scale.set(1, 1, 1); g.add(heck);
+  const bauch = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.005, R * 1.005, L, 48, 1, true, Math.PI * .62, Math.PI * .76), streifen); bauch.rotation.z = Math.PI / 2; g.add(bauch);
+  // Cockpitfenster
+  [-1, 1].forEach(s => { for (let k = 0; k < 2; k++) { const w = rund(.32, .22, .06, .05, dunkel); w.position.set(L / 2 + .95 + k * .32, .55 - k * .06, s * (.62 - k * .17)); w.rotation.y = s * (.9 + k * .35); w.rotation.z = -.35; g.add(w); } });
+  // Fensterreihen auf beiden Seiten
+  const fenster = [];
+  [-1, 1].forEach(s => { for (let k = 0; k < 26; k++) { const x = L / 2 - 1.6 - k * .34; if (x < -L / 2 + .3) break; const w = rund(.16, .24, .05, .06, dunkel); w.position.set(x, .32, s * (R - .005)); g.add(w); fenster.push(w); } });
+  // vordere linke Tür (Seite +z) mit Fuge, Griff und Bullauge
+  const tuer = new THREE.Group(); tuer.position.set(L / 2 - .9, .05, R + .002); g.add(tuer);
+  const fuge = new THREE.Mesh(new THREE.TorusGeometry(1, .018, 6, 40), dunkel); fuge.scale.set(.42, .82, 1); tuer.add(fuge);
+  const bull = rund(.16, .2, .04, .06, dunkel); bull.position.set(0, .3, .01); tuer.add(bull);
+  const griff = rund(.26, .05, .05, .02, chrom); griff.position.set(.08, -.1, .03); tuer.add(griff);
+  // Flügel (gepfeilt) mit Winglet, Triebwerk mit Fächer
+  const fans = [];
+  [-1, 1].forEach(s => {
+    const fl = platte([[0, 0], [2.6, 0], [-.6, 6.8], [-1.6, 6.8]], .16, weiss); fl.rotation.x = s * Math.PI / 2; fl.position.set(.9, -.55, 0); g.add(fl);   // Spannweite zeigt nach s·z
+    const wl = platte([[0, 0], [.6, 0], [.2, 1], [-.1, 1]], .08, streifen); wl.position.set(-1.6, -.55, s * 6.8); g.add(wl);
+    const tw = new THREE.Group(); tw.position.set(1.4, -1.25, s * 2.3); g.add(tw);
+    const gond = new THREE.Mesh(new THREE.CylinderGeometry(.5, .44, 1.8, 40, 1, true), grau); gond.material.side = THREE.DoubleSide; gond.rotation.z = Math.PI / 2; tw.add(gond);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(.5, .06, 10, 40), chrom); lip.rotation.y = Math.PI / 2; lip.position.x = .9; tw.add(lip);
+    const fan = new THREE.Group(); fan.position.x = .75; tw.add(fan); fans.push(fan);
+    const nabe = new THREE.Mesh(new THREE.ConeGeometry(.16, .35, 24), chrom); nabe.rotation.z = -Math.PI / 2; nabe.position.x = .1; fan.add(nabe);
+    for (let k = 0; k < 14; k++) { const b = rund(.04, .42, .1, .02, glanz(0x2a3040, { metall: .8, rau: .3 })); b.position.y = .25; const h = new THREE.Group(); h.add(b); h.rotation.x = k * Math.PI * 2 / 14; b.rotation.y = .5; fan.add(h); }
+    const py = rund(1.2, .5, .12, .05, weiss); py.position.set(1.0, -.85, s * 2.3); g.add(py);
+    const hoehe = platte([[0, 0], [1.4, 0], [.2, 2.4], [-.4, 2.4]], .1, weiss); hoehe.position.set(-L / 2 - 2.6, .55, 0); hoehe.rotation.x = s * Math.PI / 2; g.add(hoehe);
+  });
+  // Seitenleitwerk mit Logo (goldener Token)
+  const seite = platte([[0, 0], [2.4, 0], [.6, 3.2], [-.3, 3.2]], .14, streifen); seite.position.set(-L / 2 - 3.2, 1.1, 0); g.add(seite);
+  [-1, 1].forEach(s => { const logo = new THREE.Mesh(new THREE.CylinderGeometry(.42, .42, .04, 32), glanz(o.logo ?? 0xffc23a, { metall: 1, rau: .25 })); logo.rotation.x = Math.PI / 2; logo.position.set(-L / 2 - 2.5, 2.4, s * .12); g.add(logo); });
+  g.tuer = tuer; g.fenster = fenster; g.fans = fans;
+  return g;
+}
+// Kabine von innen (Gang entlang -z, Blick nach +z zur Tür am Ende). Sitzreihen links und rechts, Gepäckfächer, Fenster mit Himmel,
+// Deckenlicht. o.reihen, o.himmel (Farbe hinter den Fenstern). Teile: kab.tuer (Tür am Gangende, siehe tuerInnen), kab.fenster
+function sitz(stoff = 0x1e2c5a) {
+  const g = new THREE.Group(), m = glanz(stoff, { rau: .85, lack: 0 }), hell = glanz(0xe8ecf2, { rau: .6, lack: 0 }), arm = glanz(0x9aa2ae, { metall: .5, rau: .35 });
+  const kissen = rund(.9, .2, .85, .08, m); kissen.position.y = .45; g.add(kissen);
+  const lehne = rund(.9, 1.1, .2, .1, m); lehne.position.set(0, 1.05, -.38); lehne.rotation.x = -.12; g.add(lehne);
+  const kopf = rund(.62, .3, .06, .04, hell); kopf.position.set(0, 1.45, -.27); kopf.rotation.x = -.12; g.add(kopf);
+  [-1, 1].forEach(s => { const a = rund(.08, .1, .7, .04, arm); a.position.set(s * .48, .72, -.02); g.add(a); });
+  const fuss = rund(.7, .35, .1, .04, arm); fuss.position.set(0, .18, 0); g.add(fuss);
+  return g;
+}
+function tuerInnen() {
+  const g = new THREE.Group(), weiss = glanz(0xe6e9ee, { rau: .45, lack: .3 }), chrom = glanz(0xe8ecf4, { metall: 1, rau: .15 }), dunkel = glanz(0x2a3446, { rau: .5, lack: 0 });
+  const blatt = rund(1.8, 3.2, .25, .2, weiss); blatt.position.y = 1.6; g.add(blatt);
+  const rahmen = new THREE.Mesh(new THREE.TorusGeometry(1, .06, 10, 48), dunkel); rahmen.scale.set(1.02, 1.72, 1); rahmen.position.set(0, 1.6, .02); g.add(rahmen);
+  const bull = new THREE.Mesh(new THREE.CircleGeometry(.22, 32), new THREE.MeshStandardMaterial({ color: 0x9fd8ff, emissive: 0x6ab8f0, emissiveIntensity: .8 })); bull.position.set(0, 2.5, .135); g.add(bull);
+  const bullR = new THREE.Mesh(new THREE.TorusGeometry(.24, .04, 10, 32), chrom); bullR.position.set(0, 2.5, .14); g.add(bullR);
+  // großer Hebel (dreht um z an der Achse links)
+  const hebel = new THREE.Group(); hebel.position.set(-.45, 1.5, .2); g.add(hebel);
+  const lager = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .12, 20), chrom); lager.rotation.x = Math.PI / 2; hebel.add(lager);
+  const stange = rund(.95, .1, .1, .05, chrom); stange.position.x = .48; hebel.add(stange);
+  const knauf = rund(.22, .16, .16, .07, glanz(0x20242c, { rau: .4 })); knauf.position.x = .98; hebel.add(knauf);
+  const schild = rund(.36, .16, .02, .03, new THREE.MeshStandardMaterial({ color: 0xe02030, emissive: 0x900010, emissiveIntensity: .4 })); schild.position.set(.4, 2.05, .14); g.add(schild);
+  const rutsche = rund(1.5, .45, .3, .08, glanz(0x8a929e, { rau: .5 })); rutsche.position.set(0, .3, .22); g.add(rutsche);
+  g.hebel = hebel; return g;
+}
+function kabine(o = {}) {
+  const g = new THREE.Group(), n = o.reihen ?? 9, wand = glanz(0xb8bec9, { rau: .6, lack: .15 });
+  const boden = rund(4.6, .1, n * 1.2 + 4, .04, glanz(0x2a3a6a, { rau: .9, lack: 0 })); boden.position.set(0, -.05, -n * .6 + 1); g.add(boden);
+  const gang = rund(.7, .02, n * 1.2 + 4, .01, glanz(0x3a1a2a, { rau: .9, lack: 0 })); gang.position.set(0, .01, -n * .6 + 1); g.add(gang);
+  [-1, 1].forEach(s => {
+    const w = rund(.15, 2.6, n * 1.2 + 4, .06, wand); w.position.set(s * 2.35, 1.3, -n * .6 + 1); g.add(w);
+    const fach = rund(1.0, .55, n * 1.2 + 3, .1, glanz(0xc4c9d2, { rau: .45, lack: .4 })); fach.position.set(s * 1.8, 2.7, -n * .6 + 1); fach.rotation.z = s * .15; g.add(fach);
+    for (let r = 0; r < n; r++) {
+      const z = -r * 1.2 - .5;
+      [0, 1].forEach(k => { const st = sitz(o.stoff ?? 0x1e2c5a); st.position.set(s * (.85 + k * .95), 0, z); g.add(st); });
+      const f = rund(.4, .55, .05, .16, new THREE.MeshStandardMaterial({ color: o.himmel ?? 0x8fd0ff, emissive: o.himmel ?? 0x7ac0f0, emissiveIntensity: .55 })); f.position.set(s * 2.27, 1.55, z + .2); f.rotation.y = s * Math.PI / 2; g.add(f);
+    }
+  });
+  const decke = rund(2.6, .08, n * 1.2 + 4, .04, new THREE.MeshStandardMaterial({ color: 0xd8d2c4, emissive: 0xfff0d0, emissiveIntensity: .22 })); decke.position.set(0, 3.2, -n * .6 + 1); g.add(decke);
+  const stirn = rund(4.7, 3.4, .2, .06, wand); stirn.position.set(0, 1.6, 2.6); g.add(stirn);
+  const tuer = tuerInnen(); tuer.position.set(0, 0, 2.45); tuer.rotation.y = Math.PI; g.add(tuer);
+  g.tuer = tuer; return g;
+}
+// Elefant im Hausstil (rund, freundlich), ca. 3 hoch, schaut nach +z. Teile: ele.ruessel (Gruppe, dreht um x)
+function elefant(o = {}) {
+  const g = new THREE.Group(), haut = glanz(o.farbe ?? 0x9aa0b4, { rau: .75, lack: .1 }), innen = glanz(0xf0a0b8, { rau: .7, lack: 0 }), weiss = glanz(0xfff8ec, { rau: .3, lack: .6 });
+  const leib = new THREE.Mesh(new THREE.SphereGeometry(1.4, 40, 28), haut); leib.scale.set(1.25, 1, 1); leib.position.y = 1.9; g.add(leib);
+  const kopf = new THREE.Mesh(new THREE.SphereGeometry(.95, 40, 28), haut); kopf.position.set(0, 2.5, 1.35); g.add(kopf);
+  [-1, 1].forEach(s => {
+    const ohr = new THREE.Mesh(new THREE.SphereGeometry(.85, 32, 20), haut); ohr.scale.set(1, 1.15, .18); ohr.position.set(s * .95, 2.6, .95); ohr.rotation.y = s * .5; g.add(ohr);
+    const oi = new THREE.Mesh(new THREE.SphereGeometry(.65, 32, 20), innen); oi.scale.set(1, 1.1, .12); oi.position.set(s * .97, 2.6, 1.02); oi.rotation.y = s * .5; g.add(oi);
+    const auge = new THREE.Mesh(new THREE.SphereGeometry(.13, 20, 14), glanz(0x140a24, { rau: .1 })); auge.position.set(s * .38, 2.75, 2.15); g.add(auge);
+    const glanzP = new THREE.Mesh(new THREE.SphereGeometry(.04, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff })); glanzP.position.set(s * .38 + .04, 2.8, 2.27); g.add(glanzP);
+    const zahn = new THREE.Mesh(new THREE.ConeGeometry(.09, .6, 16), weiss); zahn.position.set(s * .32, 2.0, 2.0); zahn.rotation.x = 1.9; g.add(zahn);
+    [-1, 1].forEach(v => { const bein = rund(.62, 1.3, .62, .3, haut); bein.position.set(s * .8, .65, v * .65); g.add(bein);
+      for (let k = 0; k < 3; k++) { const z = new THREE.Mesh(new THREE.SphereGeometry(.09, 12, 8), weiss); z.scale.y = .6; z.position.set(s * .8 + (k - 1) * .18, .08, v * .65 + .3); g.add(z); } });
+  });
+  const ruessel = new THREE.Group(); ruessel.position.set(0, 2.25, 2.1); g.add(ruessel);
+  const kurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -.5, .35), new THREE.Vector3(0, -1.1, .4), new THREE.Vector3(0, -1.45, .75)]);
+  ruessel.add(new THREE.Mesh(new THREE.TubeGeometry(kurve, 30, .2, 16), haut));
+  const schw = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -.4, -.25), new THREE.Vector3(0, -.8, -.2)]), 12, .06, 8), haut); schw.position.set(0, 2.2, -1.7); g.add(schw);
+  g.ruessel = ruessel; return g;
+}
+// Wolke aus vielen weichen Kugeln (o.groesse, o.seed, o.farbe)
+function wolke(o = {}) {
+  const g = new THREE.Group(), r = rng(o.seed ?? 1), m = glanz(o.farbe ?? 0xffffff, { rau: .95, lack: 0 }), s = o.groesse ?? 3;
+  for (let k = 0; k < 9; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(s * (.35 + r() * .3), 24, 16), m); b.position.set((r() - .5) * s * 2.2, (r() - .3) * s * .5, (r() - .5) * s * .9); b.scale.y = .75; g.add(b); }
+  return g;
+}
+// Berg mit Schneekappe (Höhe h)
+function berg(h = 6, o = {}) {
+  const g = new THREE.Group();
+  const fels = new THREE.Mesh(jitter(new THREE.ConeGeometry(h * .75, h, 28, 8), .1, o.seed ?? 4), glanz(o.farbe ?? 0x6a6478, { rau: .9, lack: 0 })); fels.position.y = h / 2; g.add(fels);
+  const schnee = new THREE.Mesh(jitter(new THREE.ConeGeometry(h * .27, h * .36, 28, 3), .06, 9), glanz(0xf6f8ff, { rau: .6, lack: .2 })); schnee.position.y = h * .83; g.add(schnee);
+  return g;
+}
+
 // Rendert die Bühne und gibt die durchsichtige 3D-Ebene zurück (zeichnen mit g.drawImage(ebene, 0, 0, 1080, 1920))
 // Die Pixel werden direkt ausgelesen und in eine normale 2D-Fläche kopiert: das ist mit Software-Grafik
 // viel schneller, als die WebGL-Fläche selbst ins Video-Canvas zu zeichnen.
@@ -384,5 +511,5 @@ function render(st) {
   octx.putImageData(IMG, 0, 0); return out;
 }
 
-window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng, licht, glanz, schatten, rund, auto, wasser, blasen, himmel, nebel, kamera, boden };
+window.FX3D = { THREE, stage, toon, solid, paintFaces, jitter, planet, moon, rock, crystal, paperStack, ring, figure, eula, render, canvas: out, rng, licht, glanz, schatten, rund, auto, wasser, blasen, himmel, nebel, kamera, boden, platte, flugzeug, sitz, kabine, tuerInnen, elefant, wolke, berg };
 envLaden.then(() => { if (window.__ready3d) window.__ready3d(); });
