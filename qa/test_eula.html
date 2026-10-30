@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: IDB; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Black.otf); }
+@font-face { font-family: IDX; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-ExtraBold.otf); }
+@font-face { font-family: IDS; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-SemiBold.otf); }
+@font-face { font-family: IDM; src: url(file:///usr/share/fonts/opentype/inter/InterDisplay-Medium.otf); }
+html, body { margin: 0; background: #000; } canvas { display: block; }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<!-- Test „Eula im Studio“ (10 s): Goldmünzen-Turm im Studiolicht, Eula springt mit Stauchen und Strecken hinauf,
+     Kamera umkreist sie; Übergang „form“ aus der obersten Münze in eine Nahaufnahme mit Text auf Feder. -->
+<script>
+window.LICHT3D = ['studio'];
+window.READY3D = new Promise(r => window.__ready3d = r);
+const TIMING = { dur: 10, bpm: 96, sentences: [[0, 5.5], [5.5, 10]], phrases: [[0, 10, ' ']] };
+window.CFG = { DUR: 10, CUTS: [5.5], PHRASES: TIMING.phrases, CAP_END: 0, KEY: /^$/, LOOP: true, UEBERGANG: [{ art: 'form', x: 540, y: 760 }] };
+</script>
+<script type="module" src="../engine/fx3d.js"></script>
+<script src="../engine/lib.js"></script>
+<script src="../engine/fx.js"></script>
+<script>
+let A; const draw3d = st => g.drawImage(FX3D.render(st), 0, 0, W, H);
+function setup() {
+  const F = FX3D, T = F.THREE, r = F.rng(3);
+  A = F.licht(F.stage({ fov: 34 }), 'studio', { staerke: 1.6 }); F.nebel(A, 0x1a1430, 18, 60);
+  A.boden = A.add(new T.Mesh(new T.CircleGeometry(40, 64), F.glanz(0x140c26, { rau: .3, lack: .8 }))); A.boden.rotation.x = -Math.PI / 2;
+  const gold = F.glanz(0xffc23a, { metall: 1, rau: .3 }), rand = F.glanz(0xd89a20, { metall: 1, rau: .45 });
+  A.turm = new T.Group(); A.add(A.turm);
+  for (let k = 0; k < 9; k++) { const c = new T.Group(); const m = new T.Mesh(new T.CylinderGeometry(1, 1, .22, 64), gold); c.add(m);
+    const ri = new T.Mesh(new T.TorusGeometry(1, .04, 8, 64), rand); ri.rotation.x = Math.PI / 2; ri.position.y = .11; c.add(ri);
+    c.position.set((r() - .5) * .18, .11 + k * .23, (r() - .5) * .18); c.rotation.y = r() * 6; A.turm.add(c); }
+  A.turm.position.set(1.2, 0, 0);
+  for (let k = 0; k < 14; k++) { const c = new T.Mesh(new T.CylinderGeometry(.6, .6, .14, 48), gold); c.position.set(-4 + r() * 9, .07, -3 - r() * 6); c.rotation.set(r() * .3, 0, r() * .3); A.add(c); }
+  A.sh = A.add(F.schatten(1.6, .6)); A.sh.position.set(-1.4, .01, 0);
+  A.eu = A.add(F.eula()); A.eu.scale.setScalar(.6);
+}
+function hopY(t) { // Eula springt bei 2,2 s vom Boden auf den Turm (Höhe 2,1)
+  const u = clamp((t - 2.2) / .8); return { x: lerp(-1.4, 1.2, eio(u)), y: lerp(1.02, 1.02 + 2.12, eio(u)) + Math.sin(Math.PI * u) * 1.6 };
+}
+const SC = [];
+SC[0] = t => {
+  bg([[0, '#2a1a4a'], [1, '#0a0614']]);
+  const h = hopY(t); A.eu.position.set(h.x, h.y, 0); A.eu.pose(t, { mood: t < 3.1 ? 'idle' : 'happy', hop: 2.2, ziel: [1.2, 2.2, 0] });
+  A.sh.position.x = h.x; A.sh.material.opacity = .6 - (h.y - 1.02) * .08;
+  A.turm.children.forEach((c, i) => c.rotation.y += 0);
+  FX3D.kamera(A, t, [{ t: 0, pos: [-6, 3.2, 13], ziel: [0, 1.9, 0], fov: 40 }, { t: 5.5, pos: [6, 4.5, 10], ziel: [.8, 2.6, 0], fov: 36 }]);
+  draw3d(A);
+};
+SC[1] = t => {
+  bg([[0, '#2a1a4a'], [1, '#0a0614']]);
+  A.eu.position.set(1.2, 3.14, 0); A.eu.pose(t, { mood: 'wow' });
+  FX3D.kamera(A, t - 5.5, [{ t: 0, pos: [4, 5.2, 8.5], ziel: [1.2, 3.9, 0], fov: 36 }, { t: 4.5, pos: [1.6, 4.8, 7.5], ziel: [1.2, 3.8, 0], fov: 32 }]);
+  draw3d(A);
+  ['9', 'MÜNZEN', 'GESTAPELT'].forEach((w, i) => { const k = nach(t, 6.1, i, .14, .55); if (k > 0) text(w, 540, 300 + i * 120, i ? 92 : 170, 'IDB', i === 0 ? '#ffd23f' : '#ffffff', { alpha: clamp(k * 4), sc: lerp(.4, 1, spring(k)), stroke: 14, strokeColor: 'rgba(10,6,30,.85)' }); });
+};
+SC.forEach((f, i) => { SC[i] = t => { if (!A) setup(); f(t); }; });
+function scene(t) { SC[t < 5.5 ? 0 : 1](t); }
+</script>
+</body></html>
